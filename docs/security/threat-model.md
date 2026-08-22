@@ -10,6 +10,7 @@ The MVP consists of an extension running on third-party pages and a backend list
 - League configuration, draft history, rosters, and local databases.
 - Integrity of canonical state and recommendations.
 - Captured platform responses/fixtures and logs.
+- Provider user, league, roster, draft, individual-player, and team-defense identifiers observed from Sleeper.
 - Extension permissions and update/package integrity.
 
 ## Trust boundaries
@@ -19,6 +20,7 @@ The MVP consists of an extension running on third-party pages and a backend list
 - The extension service worker is trusted to hold machine-local configuration and call the backend.
 - Loopback callers are unauthenticated until the backend validates the bearer token and allowed origin/context.
 - External datasets and dependencies are untrusted inputs until validated.
+- A documented provider API is an untrusted external input even when it requires no credential.
 
 ## Required controls
 
@@ -28,6 +30,9 @@ The MVP consists of an extension running on third-party pages and a backend list
 - Define a narrow CORS policy for the installed extension origin. Do not use wildcard origins with authenticated endpoints.
 - Validate content-script/service-worker message origin, shape, supported surface, size, and operation.
 - Grant only required host permissions for supported domains and loopback; prefer optional permissions when feasible.
+- A provider API request originates only from the extension service worker after exact-surface
+  activation and validated local configuration. It uses a narrowly scoped host permission, bounded
+  polling, backoff, and response-size/schema validation; content scripts do not fetch it directly.
 - Validate all external IDs, lengths, enums, numeric ranges, snapshots, and event ordering server-side.
 - Use parameterized database access and safe file paths rooted in configured data directories.
 - Redact authorization, cookies, credentials, personal/account identifiers, and sensitive payloads from logs and diagnostics.
@@ -49,12 +54,18 @@ Rotation invalidates the old token and requires explicit extension re-pairing. B
 | Replay of a valid event | Idempotency returns the established result |
 | Event ID reused with changed payload | Return conflict and log correlation, preserving state |
 | Poisoned mapping/source data | Validate provenance/uniqueness, quarantine conflict, pin last valid version |
+| Provider API unavailable, throttled, or malformed | Stop fresh observations, retain canonical history, mark recommendations non-current, and retry with bounded backoff |
+| Extension fetches an unapproved host or page script requests provider data | Exact content-script matching, minimal host permissions, service-worker-only request path, and message validation |
 | Logs or fixtures expose user data | Structured redaction and fixture sanitization gates |
 | Compromised dependency | Lockfiles, minimal dependencies, review/update process and reproducible rebuild |
 
 ## Privacy and retention
 
-Store only data needed for recommendations, reproducibility, and diagnostics. Keep it local by default and provide documented deletion/reset and export behavior. Remote telemetry is off-scope and cannot be introduced without explicit consent, a data inventory, retention policy, and updated threat model.
+Store only data needed for recommendations, reproducibility, and diagnostics. Keep it local by
+default and provide documented deletion/reset and export behavior. Provider user, league, roster,
+and draft identifiers are private local configuration/diagnostic values and are redacted from
+exports, fixtures, and logs. Remote telemetry is off-scope and cannot be introduced without
+explicit consent, a data inventory, retention policy, and updated threat model.
 
 ## Security acceptance
 
