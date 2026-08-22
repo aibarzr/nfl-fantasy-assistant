@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from .curation import CuratedWeek
 from .errors import DataValidationError
 
-FEATURE_VERSION = "1"
+FEATURE_VERSION = "2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +24,13 @@ class SemanticFeature:
     role_stability_4: float | None
     availability_rate_4: float | None
     historical_production_points_per_game: float | None
+    kicking_attempts_per_game_4: float | None
+    kicking_conversion_rate_4: float | None
+    extra_point_attempts_per_game_4: float | None
+    defensive_sacks_per_game_4: float | None
+    turnovers_forced_per_game_4: float | None
+    points_allowed_per_game_4: float | None
+    defensive_touchdowns_per_game_4: float | None
     feature_version: str
     lineage_manifest_ids: tuple[str, ...]
 
@@ -39,13 +46,23 @@ def _period(row: CuratedWeek) -> tuple[int, int]:
 def _fantasy_production(row: CuratedWeek) -> float:
     # This is historical production represented once; downstream projectors must not add its
     # component stats as a second final-score input.
-    return (
+    skill_position_points = (
         (row.receptions or 0)
         + (row.receiving_yards or 0) / 10
         + (row.rushing_yards or 0) / 10
         + (row.passing_yards or 0) / 25
         + (row.touchdowns or 0) * 6
     )
+    if row.position == "K":
+        return (row.field_goals_made or 0) * 3 + (row.extra_points_made or 0)
+    if row.position == "DEF":
+        return (
+            (row.defensive_sacks or 0)
+            + (row.defensive_interceptions or 0) * 2
+            + (row.defensive_fumble_recoveries or 0) * 2
+            + (row.defensive_touchdowns or 0) * 6
+        )
+    return skill_position_points
 
 
 def build_semantic_features(rows: Iterable[CuratedWeek]) -> list[SemanticFeature]:
@@ -66,6 +83,18 @@ def build_semantic_features(rows: Iterable[CuratedWeek]) -> list[SemanticFeature
             (item.targets or 0) + (item.rush_attempts or 0) + (item.red_zone_touches or 0)
             for item in history
         ]
+        kicking_attempts = [item.field_goal_attempts or 0 for item in history]
+        kicking_attempts_made = [item.field_goals_made or 0 for item in history]
+        extra_point_attempts = [item.extra_point_attempts or 0 for item in history]
+        defensive_sacks = [item.defensive_sacks or 0 for item in history]
+        turnovers_forced = [
+            (item.defensive_interceptions or 0) + (item.defensive_fumble_recoveries or 0)
+            for item in history
+        ]
+        points_allowed = [
+            item.points_allowed for item in history if item.points_allowed is not None
+        ]
+        defensive_touchdowns = [item.defensive_touchdowns or 0 for item in history]
         yards = [(item.receiving_yards or 0) + (item.rushing_yards or 0) for item in history]
         opportunities = [(item.targets or 0) + (item.rush_attempts or 0) for item in history]
         efficiency_values = [
@@ -93,6 +122,17 @@ def build_semantic_features(rows: Iterable[CuratedWeek]) -> list[SemanticFeature
                 historical_production_points_per_game=_mean(
                     [_fantasy_production(item) for item in history]
                 ),
+                kicking_attempts_per_game_4=_mean(kicking_attempts),
+                kicking_conversion_rate_4=(
+                    sum(kicking_attempts_made) / sum(kicking_attempts)
+                    if sum(kicking_attempts) > 0
+                    else None
+                ),
+                extra_point_attempts_per_game_4=_mean(extra_point_attempts),
+                defensive_sacks_per_game_4=_mean(defensive_sacks),
+                turnovers_forced_per_game_4=_mean(turnovers_forced),
+                points_allowed_per_game_4=_mean(points_allowed),
+                defensive_touchdowns_per_game_4=_mean(defensive_touchdowns),
                 feature_version=FEATURE_VERSION,
                 lineage_manifest_ids=tuple(sorted({item.lineage_manifest_id for item in history})),
             )

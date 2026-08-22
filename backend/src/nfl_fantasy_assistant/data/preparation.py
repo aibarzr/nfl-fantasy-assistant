@@ -2,26 +2,31 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+import pyarrow as pa  # type: ignore[import-untyped]
+import pyarrow.parquet as pq  # type: ignore[import-untyped]
+
+from nfl_fantasy_assistant.domain.scoring import (
+    SUPPORTED_SCORING_STATS,
+    ScoringError,
+    validate_scoring_rules,
+)
 
 from .curation import SUPPORTED_POSITIONS
 from .errors import DataValidationError
 from .identity import Resolution
 
-SUPPORTED_SCORING_STATS = frozenset(
-    {
-        "passing_yards",
-        "passing_touchdowns",
-        "interceptions",
-        "rushing_yards",
-        "rushing_touchdowns",
-        "receptions",
-        "receiving_yards",
-        "receiving_touchdowns",
-        "fumbles_lost",
-    }
-)
+
+def validate_prepared_scoring_rules(scoring_rules: Mapping[str, float]) -> None:
+    """Reject unmapped scoring semantics before they reach a draft configuration."""
+    try:
+        validate_scoring_rules(scoring_rules)
+    except ScoringError as error:
+        raise DataValidationError(str(error)) from error
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +37,18 @@ class PreparedPlayer:
     source_updated_at: str
     feature_version: str
     dataset_version: str
+
+
+PREPARED_SCHEMA = pa.schema(
+    [
+        ("internal_player_id", pa.string()),
+        ("position", pa.string()),
+        ("baseline_score", pa.float64()),
+        ("source_updated_at", pa.string()),
+        ("feature_version", pa.string()),
+        ("dataset_version", pa.string()),
+    ]
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,9 +70,7 @@ class LeaguePreparationContext:
 
 
 def score_stat_line(stat_line: Mapping[str, float], scoring_rules: Mapping[str, float]) -> float:
-    unsupported = set(scoring_rules) - SUPPORTED_SCORING_STATS
-    if unsupported:
-        raise DataValidationError(f"unsupported scoring semantics: {sorted(unsupported)}")
+    validate_prepared_scoring_rules(scoring_rules)
     unknown_stats = set(stat_line) - SUPPORTED_SCORING_STATS
     if unknown_stats:
         raise DataValidationError(f"unsupported stat line fields: {sorted(unknown_stats)}")
@@ -100,3 +115,11 @@ def prepare_baseline_pool(
     return sorted(prepared, key=lambda player: (-player.baseline_score, player.internal_player_id))[
         :target_size
     ]
+
+
+def write_prepared_parquet(rows: Iterable[PreparedPlayer], path: Path) -> str:
+    """Write prepared, version-pinned values for atomic dataset publication."""
+    table = pa.Table.from_pylist([asdict(row) for row in rows], schema=PREPARED_SCHEMA)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(table, path, compression="zstd", version="2.6")
+    return hashlib.sha256(path.read_bytes()).hexdigest()

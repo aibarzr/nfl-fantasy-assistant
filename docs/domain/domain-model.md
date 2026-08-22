@@ -8,8 +8,8 @@
 - **Accepted event:** an observation validated and applied exactly once.
 - **Snapshot:** a point-in-time observation used to initialize or reconcile state.
 - **Canonical state:** the last valid, persisted backend representation.
-- **Player reference:** provider plus external ID, optionally accompanied by display fields.
-- **Internal player:** the stable application entity to which external identities map.
+- **Draftable-asset reference:** provider plus external ID, optionally accompanied by display fields.
+- **Internal draftable asset:** the stable application entity to which external identities map. It is either an individual player or a team-defense asset.
 - **Recommendation snapshot:** ranked output plus every input/version needed to reproduce it.
 
 Names, abbreviations, team, and position are attributes, not identity. `gsis_id` is preferred when available, but a generated internal ID is always retained.
@@ -37,15 +37,24 @@ DISCOVERED -> ACTIVE -> COMPLETE
 
 ### DraftPick
 
-Contains overall pick number, round, pick-in-round, team ID, internal player ID, and source observation metadata. Overall pick number is unique within the session. A player may be drafted at most once, and each accepted pick must correspond to the configured draft order.
+Contains overall pick number, round, pick-in-round, team ID, internal draftable-asset ID, and
+source observation metadata. Overall pick number is unique within the session. An asset may be
+drafted at most once, and each accepted pick must correspond to the configured draft order.
 
 ### TeamRoster
 
-Is derived from accepted picks and `LeagueConfig`, not independently edited by browser observations. Slot assignment may be recalculated, but the selected players and legal-roster constraints must remain consistent.
+Is derived from accepted picks and `LeagueConfig`, not independently edited by browser
+observations. Slot assignment may be recalculated, but the selected assets and legal-roster
+constraints must remain consistent.
 
-### Player
+### DraftableAsset
 
-Contains internal ID, available external IDs, display name, NFL team, position, and identity metadata. External-ID mappings are unique within `(provider, external_id)` unless explicitly quarantined as a data conflict.
+Contains internal ID, asset type, available external IDs, display name, NFL team, position, and
+identity metadata. Individual-player assets cover QB/RB/WR/TE/K. A `DEF` asset represents one
+draftable NFL team defense, not a fictional player. It has a stable provider external ID and NFL
+team identity, plus season/validity provenance where the provider requires it. External-ID
+mappings are unique within `(provider, external_id)` unless explicitly quarantined as a data
+conflict.
 
 ### RecommendationSnapshot
 
@@ -57,14 +66,19 @@ Records pick context, timestamp, available-player set or stable reference to it,
 - Accepted event IDs are unique per draft and repeat with the same payload/outcome.
 - Reusing an accepted event ID with a materially different payload is a conflict.
 - Accepted overall pick numbers are unique, monotonic in normal ingestion, and may contain a temporary observed gap only while reconciliation is required.
-- Drafted players are absent from availability; unresolved observations do not silently remove a guessed player.
+- Drafted assets are absent from availability; unresolved observations do not silently remove a guessed asset.
 - Rosters are projections of accepted picks and the configured order.
 - Replacement level and roster legality derive from the active league configuration.
 - A draft pins versions; the same pinned inputs yield the same ranking.
 
 ## Identity resolution
 
-Resolution proceeds by exact external mapping, then supported authoritative crosswalks, then controlled normalized-name candidates with corroborating team/position/rookie context. A name fallback is accepted only when it produces one sufficiently supported candidate under a versioned rule. Otherwise the observation remains unresolved.
+Resolution of an individual player proceeds by exact external mapping, then supported authoritative
+crosswalks, then controlled normalized-name candidates with corroborating team/position/rookie
+context. A name fallback is accepted only when it produces one sufficiently supported candidate
+under a versioned rule. A team defense resolves only through an exact provider mapping or an
+authoritative team/season crosswalk; it never uses a player-name fallback. Otherwise the
+observation remains unresolved.
 
 Identity resolution returns a result such as `resolved`, `unresolved`, or `conflict` with provenance and method. It never mutates historical accepted identity silently when a source mapping changes.
 
@@ -82,4 +96,8 @@ Reconciliation records its source, timestamp, differences, and outcome.
 
 ## Scoring and draft calculations
 
-Fantasy points are calculated from explicit `LeagueConfig.scoring_rules`. Flex demand is derived from eligible positions and roster slots. League size affects replacement level, scarcity, future turn distance, and positional demand; no universal `QB12`/`RB30` constant is a domain rule.
+Fantasy points are calculated from explicit `LeagueConfig.scoring_rules`. QB/RB/WR/TE/K are
+individual-player positions; `DEF` is a team-defense asset. Flex demand is derived from explicitly
+listed eligible positions and roster slots, not a position-name heuristic. League size affects
+replacement level, scarcity, future turn distance, and positional demand; no universal
+`QB12`/`RB30` constant is a domain rule.

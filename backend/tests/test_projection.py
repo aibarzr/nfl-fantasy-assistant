@@ -42,7 +42,7 @@ def features(**overrides: object) -> ProjectionFeatures:
     return ProjectionFeatures(**values)
 
 
-@pytest.mark.parametrize("position", ("QB", "RB", "WR", "TE"))
+@pytest.mark.parametrize("position", ("QB", "RB", "WR", "TE", "K", "DEF"))
 def test_position_projectors_are_deterministic_and_position_specific(position: str) -> None:
     projection = project_player(
         ProjectionInput(f"player-{position}", position, features()), SCORING, now=NOW
@@ -52,11 +52,15 @@ def test_position_projectors_are_deterministic_and_position_specific(position: s
     )
     assert projection == replay
     assert projection.floor_points < projection.expected_points < projection.ceiling_points
-    assert projection.model_version == "projection-v1"
+    assert projection.model_version == "projection-v2"
     if position == "QB":
         assert "rushing_role" in projection.components
     if position in {"RB", "WR", "TE"}:
         assert "receiving_role" in projection.components
+    if position == "K":
+        assert "kicking_attempts" in projection.components
+    if position == "DEF":
+        assert "defensive_sacks" in projection.components
 
 
 def test_ppr_and_stale_feature_inputs_change_scoring_and_confidence_explicitly() -> None:
@@ -91,6 +95,35 @@ def test_rookie_uses_documented_prior_without_missing_history_penalty() -> None:
     assert rookie.confidence > 0.45
     with pytest.raises(ProjectionError, match="rookie prior"):
         ProjectionInput("bad-rookie", "RB", features(), is_rookie=True)
+    with pytest.raises(ProjectionError, match="team-defense"):
+        ProjectionInput(
+            "bad-defense", "DEF", features(), is_rookie=True, rookie_prior=RookiePrior()
+        )
+
+
+def test_kicker_and_defense_scoring_are_explicit_and_position_specific() -> None:
+    kicker = ProjectionInput(
+        "kicker-1",
+        "K",
+        features(
+            kicking_attempts_per_game=3.0,
+            kicking_conversion_rate=0.9,
+            extra_point_attempts_per_game=2.0,
+        ),
+    )
+    defense = ProjectionInput(
+        "defense-1",
+        "DEF",
+        features(
+            defensive_sacks_per_game=3.0,
+            turnovers_forced_per_game=1.5,
+            points_allowed_per_game=18.0,
+        ),
+    )
+    scored_kicker = project_player(kicker, {"field_goals_made": 3.0}, now=NOW)
+    scored_defense = project_player(defense, {"defensive_sacks": 1.0}, now=NOW)
+    assert scored_kicker.expected_points > project_player(kicker, {}, now=NOW).expected_points
+    assert scored_defense.expected_points > project_player(defense, {}, now=NOW).expected_points
 
 
 def test_parameter_validation_and_timezone_requirements_are_visible() -> None:
@@ -109,3 +142,5 @@ def test_projection_metrics_are_deterministic_and_segmented_by_position() -> Non
     assert metrics.count == 3
     assert metrics.mae == pytest.approx(1.666667)
     assert metrics.by_position["QB"].spearman == pytest.approx(1.0)
+    k_def_metrics = projection_metrics((("K", 12.0, 11.0), ("DEF", 9.0, 10.0)))
+    assert set(k_def_metrics.by_position) == {"K", "DEF"}

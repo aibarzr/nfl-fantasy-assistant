@@ -114,3 +114,51 @@ def test_promotion_requires_improvement_and_blocks_segment_regression() -> None:
     )
     with pytest.raises(BacktestError, match="stage segment"):
         assert_promotable(degraded, baseline)
+
+
+def test_k_and_def_segments_are_present_in_reproducible_promotion_evidence() -> None:
+    def observation(position: str, first: str) -> DecisionObservation:
+        rankings = {
+            strategy: (first, "b", "c")
+            for strategy in {
+                "ecr_only",
+                "adp_only",
+                "best_available",
+                "static_vor",
+                "dynamic_vor",
+                "full_engine",
+            }
+        }
+        return DecisionObservation(
+            f"decision-{position}",
+            NOW,
+            NOW - timedelta(days=1),
+            {"a": 12, "b": 8, "c": 4},
+            rankings,
+            position,
+            "late",
+            1,
+            False,
+            "medium",
+        )
+
+    def k_def_report(first: str) -> BacktestReport:
+        return run_backtest(
+            (
+                ProjectionObservation("K", 10, 11, NOW - timedelta(days=1), NOW),
+                ProjectionObservation("DEF", 9, 10, NOW - timedelta(days=1), NOW),
+            ),
+            (observation("K", first), observation("DEF", first)),
+            dataset_version="k-def-fixture-v1",
+            feature_version="feature-v2",
+            model_version="projection-v2",
+            parameter_version="parameters-v2",
+            transform_revision="k-def-pbp-v1",
+            limitations=("synthetic K/DEF fixture",),
+        )
+
+    baseline = k_def_report("b")
+    candidate = k_def_report("a")
+    assert candidate == k_def_report("a")
+    assert set(candidate.projection.by_position) == {"K", "DEF"}
+    assert_promotable(candidate, baseline)

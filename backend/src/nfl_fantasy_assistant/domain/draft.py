@@ -14,6 +14,8 @@ from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 
+from .scoring import ScoringError, validate_scoring_rules
+
 
 class DomainError(ValueError):
     """A requested state transition violates a canonical draft invariant."""
@@ -31,6 +33,14 @@ class IdentityState(StrEnum):
     RESOLVED = "resolved"
     UNRESOLVED = "unresolved"
     CONFLICT = "conflict"
+
+
+class AssetType(StrEnum):
+    PLAYER = "player"
+    TEAM_DEFENSE = "team_defense"
+
+
+SUPPORTED_DRAFT_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 
 
 class ReconciliationState(StrEnum):
@@ -63,7 +73,11 @@ class LeagueId:
 
 @dataclass(frozen=True, slots=True)
 class Player:
-    """Stable player entity; display attributes are never identity keys."""
+    """Stable draftable asset; display attributes are never identity keys.
+
+    The retained ``Player`` name is a compatibility boundary for persisted v1 records.  ``DEF``
+    uses ``AssetType.TEAM_DEFENSE`` and never represents a fictional individual player.
+    """
 
     internal_player_id: str
     external_ids: Mapping[str, str]
@@ -71,15 +85,30 @@ class Player:
     position: str
     nfl_team: str | None = None
     identity_state: IdentityState = IdentityState.RESOLVED
+    asset_type: AssetType | None = None
 
     def __post_init__(self) -> None:
-        if not self.internal_player_id.strip() or not self.position.strip():
+        if not self.internal_player_id.strip() or self.position not in SUPPORTED_DRAFT_POSITIONS:
             raise DomainError("player ID and position are required")
         if any(
             not provider or not external_id for provider, external_id in self.external_ids.items()
         ):
             raise DomainError("player external IDs must be non-empty provider/ID pairs")
+        derived_asset_type = AssetType.TEAM_DEFENSE if self.position == "DEF" else AssetType.PLAYER
+        if self.asset_type is not None and self.asset_type is not derived_asset_type:
+            raise DomainError("asset type must agree with position")
+        if derived_asset_type is AssetType.TEAM_DEFENSE and not self.nfl_team:
+            raise DomainError("team-defense assets require an NFL team")
         object.__setattr__(self, "external_ids", MappingProxyType(dict(self.external_ids)))
+        object.__setattr__(self, "asset_type", derived_asset_type)
+
+    @property
+    def internal_asset_id(self) -> str:
+        """Neutral terminology while v1 persistence retains ``internal_player_id``."""
+        return self.internal_player_id
+
+
+DraftableAsset = Player
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,9 +121,17 @@ class PlayerReference:
     position: str | None = None
     nfl_team: str | None = None
 
+    @property
+    def asset_type(self) -> AssetType | None:
+        if self.position is None:
+            return None
+        return AssetType.TEAM_DEFENSE if self.position == "DEF" else AssetType.PLAYER
+
     def __post_init__(self) -> None:
         if not self.provider.strip() or not self.external_id.strip():
             raise DomainError("player reference requires provider and external ID")
+        if self.position is not None and self.position not in SUPPORTED_DRAFT_POSITIONS:
+            raise DomainError("player reference position is unsupported")
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +145,9 @@ class RosterSlot:
     def __post_init__(self) -> None:
         if not self.name.strip() or not self.eligible_positions:
             raise DomainError("roster slots require a name and at least one eligible position")
+        unsupported = self.eligible_positions - SUPPORTED_DRAFT_POSITIONS
+        if unsupported:
+            raise DomainError(f"roster slot has unsupported positions: {sorted(unsupported)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +171,10 @@ class LeagueConfig:
             raise DomainError("league configuration requires roster slots")
         if not all(isinstance(points, int | float) for points in self.scoring_rules.values()):
             raise DomainError("scoring rules must be numeric")
+        try:
+            validate_scoring_rules(self.scoring_rules)
+        except ScoringError as error:
+            raise DomainError(str(error)) from error
         if self.te_premium < 0:
             raise DomainError("TE premium cannot be negative")
         object.__setattr__(self, "scoring_rules", MappingProxyType(dict(self.scoring_rules)))

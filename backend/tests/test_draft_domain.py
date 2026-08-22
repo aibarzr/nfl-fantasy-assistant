@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from nfl_fantasy_assistant.domain.draft import (
+    AssetType,
     DomainError,
     DraftId,
     DraftPick,
@@ -87,3 +88,32 @@ def test_availability_and_roster_derivation_reject_corruption() -> None:
     state = apply_pick(session(), pick(1, "team-1", "missing"))
     with pytest.raises(DomainError, match="known internal players"):
         derive_rosters(state, {})
+
+
+def test_team_defense_is_an_explicit_team_asset_and_can_fill_a_def_slot() -> None:
+    config = LeagueConfig(
+        "league-v1",
+        2,
+        "snake",
+        (RosterSlot("DEF", frozenset({"DEF"})),),
+        {},
+    )
+    state = DraftSession(
+        DraftId("draft-def"),
+        LeagueId("league-def"),
+        "sleeper",
+        "provider-def",
+        config,
+        "team-1",
+        1,
+        ("team-1", "team-2"),
+        "dataset-1",
+        "feature-1",
+        "model-1",
+    )
+    updated = apply_pick(state, pick(1, "team-1", "defense-chi"))
+    defense = Player("defense-chi", {"sleeper": "CHI"}, "Chicago", "DEF", "CHI")
+    assert defense.asset_type is AssetType.TEAM_DEFENSE
+    assert derive_rosters(updated, {"defense-chi": defense})[0].assignments[0].slot_name == "DEF"
+    with pytest.raises(DomainError, match="NFL team"):
+        Player("defense-missing", {"sleeper": "missing"}, "Missing", "DEF")

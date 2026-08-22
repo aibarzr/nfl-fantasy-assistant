@@ -554,7 +554,9 @@
                   "QB",
                   "RB",
                   "WR",
-                  "TE"
+                  "TE",
+                  "K",
+                  "DEF"
                 ],
                 "type": "string"
               },
@@ -707,7 +709,9 @@
                 "QB",
                 "RB",
                 "WR",
-                "TE"
+                "TE",
+                "K",
+                "DEF"
               ],
               "type": "string"
             },

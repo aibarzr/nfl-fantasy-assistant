@@ -19,7 +19,7 @@ from nfl_fantasy_assistant.models.draft_ranking import (
     rank_draft_candidates,
 )
 from nfl_fantasy_assistant.models.projection import PlayerProjection
-from nfl_fantasy_assistant.models.replacement import ValueOverReplacement
+from nfl_fantasy_assistant.models.replacement import ValueOverReplacement, value_over_replacement
 from nfl_fantasy_assistant.models.valuation import PlayerValue
 
 
@@ -117,3 +117,48 @@ def test_ranking_rejects_blocked_or_drafted_availability() -> None:
             (rank_input("drafted-1", "RB", 0.5, 0.5),),
             {"drafted-1": "RB"},
         )
+
+
+def test_k_and_def_have_replacement_and_explainable_ranking_coverage() -> None:
+    active = DraftSession(
+        DraftId("k-def-draft"),
+        LeagueId("k-def-league"),
+        "fixture",
+        "k-def-provider-draft",
+        LeagueConfig(
+            "k-def-config",
+            2,
+            "snake",
+            (
+                RosterSlot("K", frozenset({"K"})),
+                RosterSlot("DEF", frozenset({"DEF"})),
+                RosterSlot("BN", frozenset({"K", "DEF"}), is_bench=True),
+            ),
+            {"field_goals_made": 3, "defensive_sacks": 1},
+        ),
+        "team-1",
+        1,
+        ("team-1", "team-2", "team-2", "team-1"),
+        "k-def-fixture-v1",
+        "feature-v2",
+        "projection-v2",
+        DraftStatus.ACTIVE,
+    )
+    values = (
+        rank_input("kicker-1", "K", 0, 0.5).player_value,
+        rank_input("defense-1", "DEF", 0, 0.5).player_value,
+    )
+    vors = {
+        item.internal_player_id: item for item in value_over_replacement(active.config, values, {})
+    }
+    inputs = tuple(
+        DraftRankInput(
+            value,
+            vors[value.internal_player_id],
+            rank_input(value.internal_player_id, value.position, 0, 0.5).projection,
+        )
+        for value in values
+    )
+    ranked = rank_draft_candidates(active, inputs, {}, top_n=2)
+    assert {item.candidate.internal_player_id for item in ranked} == {"kicker-1", "defense-1"}
+    assert all("vor" in item.candidate.components for item in ranked)

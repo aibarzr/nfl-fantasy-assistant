@@ -14,8 +14,8 @@ import pyarrow.parquet as pq  # type: ignore[import-untyped]
 
 from .errors import DataValidationError
 
-SCHEMA_VERSION = "1"
-SUPPORTED_POSITIONS = frozenset({"QB", "RB", "WR", "TE"})
+SCHEMA_VERSION = "2"
+SUPPORTED_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +25,9 @@ class CuratedPlayer:
     display_name: str
     position: str
     nfl_team: str | None
+    asset_type: str
+    valid_from_season: int | None
+    valid_through_season: int | None
     source_updated_at: str
     lineage_manifest_id: str
 
@@ -44,6 +47,16 @@ class CuratedWeek:
     rushing_yards: float | None
     passing_yards: float | None
     touchdowns: float | None
+    field_goal_attempts: float | None
+    field_goals_made: float | None
+    extra_point_attempts: float | None
+    extra_points_made: float | None
+    defensive_sacks: float | None
+    defensive_interceptions: float | None
+    defensive_fumble_recoveries: float | None
+    defensive_touchdowns: float | None
+    points_allowed: float | None
+    yards_allowed: float | None
     red_zone_touches: float | None
     snap_share: float | None
     active: bool
@@ -58,6 +71,9 @@ PLAYER_SCHEMA = pa.schema(
         ("display_name", pa.string()),
         ("position", pa.string()),
         ("nfl_team", pa.string()),
+        ("asset_type", pa.string()),
+        ("valid_from_season", pa.int16()),
+        ("valid_through_season", pa.int16()),
         ("source_updated_at", pa.string()),
         ("lineage_manifest_id", pa.string()),
     ]
@@ -120,13 +136,25 @@ def curate_players(rows: Iterable[Mapping[str, Any]], manifest_id: str) -> list[
         position = str(_required(row, "position")).upper()
         if position not in SUPPORTED_POSITIONS:
             raise DataValidationError(f"unsupported player position: {position}")
+        nfl_team = str(row["nfl_team"]).upper() if row.get("nfl_team") else None
+        if position == "DEF" and nfl_team is None:
+            raise DataValidationError("team-defense assets require nfl_team")
+        valid_from = int(row["valid_from_season"]) if row.get("valid_from_season") else None
+        valid_through = (
+            int(row["valid_through_season"]) if row.get("valid_through_season") else None
+        )
+        if valid_from is not None and valid_through is not None and valid_from > valid_through:
+            raise DataValidationError("asset validity seasons must be ordered")
         result.append(
             CuratedPlayer(
                 source_player_id=source_player_id,
                 gsis_id=str(row["gsis_id"]) if row.get("gsis_id") else None,
                 display_name=str(_required(row, "display_name")),
                 position=position,
-                nfl_team=str(row["nfl_team"]).upper() if row.get("nfl_team") else None,
+                nfl_team=nfl_team,
+                asset_type="team_defense" if position == "DEF" else "player",
+                valid_from_season=valid_from,
+                valid_through_season=valid_through,
                 source_updated_at=str(_required(row, "source_updated_at")),
                 lineage_manifest_id=manifest_id,
             )

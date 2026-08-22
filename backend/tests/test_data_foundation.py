@@ -18,6 +18,7 @@ from nfl_fantasy_assistant.data.errors import DataValidationError, PublicationEr
 from nfl_fantasy_assistant.data.features import build_semantic_features
 from nfl_fantasy_assistant.data.identity import (
     ExternalReference,
+    IdentityMapping,
     IdentityPipeline,
     ManualOverride,
     Resolution,
@@ -28,10 +29,12 @@ from nfl_fantasy_assistant.data.ingestion import (
     SnapshotIngestor,
     SourceSpec,
 )
+from nfl_fantasy_assistant.data.k_def import transform_pbp_k_def
 from nfl_fantasy_assistant.data.preparation import (
     LeaguePreparationContext,
     prepare_baseline_pool,
     score_stat_line,
+    write_prepared_parquet,
 )
 from nfl_fantasy_assistant.data.publishing import (
     DatasetPublisher,
@@ -230,6 +233,295 @@ def test_scoring_and_pool_reject_unsupported_or_unresolved() -> None:
     )
     assert len(large_pool) == 300
     assert large_pool[0].baseline_score == 349
+
+
+def test_kicker_and_team_defense_use_explicit_scoring_and_exact_identity() -> None:
+    assert (
+        score_stat_line(
+            {"field_goals_made": 3, "extra_points_made": 2},
+            {"field_goals_made": 3, "extra_points_made": 1},
+        )
+        == 11
+    )
+    assert (
+        score_stat_line(
+            {"defensive_sacks": 4, "defensive_interceptions": 2, "points_allowed": 10},
+            {"defensive_sacks": 1, "defensive_interceptions": 2, "points_allowed": -0.1},
+        )
+        == 7
+    )
+    defense = curate_players(
+        [
+            player_row(
+                "def-chi",
+                gsis_id=None,
+                display_name="Chicago Defense",
+                position="DEF",
+                nfl_team="CHI",
+            )
+        ],
+        "source-defense",
+    )[0]
+    pipeline = IdentityPipeline.from_players([defense])
+    exact = pipeline.resolve(ExternalReference("nflverse", "def-chi", position="DEF"))
+    assert exact.state == "resolved"
+    assert (exact.internal_player_id or "").startswith("defense-")
+    assert pipeline.mappings()[0].asset_type == "team_defense"
+    unresolved = pipeline.resolve(ExternalReference("other", None, "Chicago Defense", "CHI", "DEF"))
+    assert unresolved.state == "unresolved"
+    context = LeaguePreparationContext(8, ("K", "DEF", "BN"), frozenset({"RB", "WR", "TE"}))
+    pool = prepare_baseline_pool(
+        [
+            (Resolution("resolved", "kicker-1", "fixture", "fixture"), "K", 9.0, "now"),
+            (exact, "DEF", 8.0, "now"),
+        ],
+        "feature-2",
+        "dataset-2",
+        context,
+    )
+    assert [item.position for item in pool] == ["K", "DEF"]
+
+
+def test_kicker_and_team_defense_features_are_time_safe_and_position_specific() -> None:
+    kicker_features = build_semantic_features(
+        curate_weeks(
+            [
+                week_row(
+                    1,
+                    player_id="kicker-1",
+                    position="K",
+                    field_goal_attempts=3,
+                    field_goals_made=2,
+                    extra_point_attempts=2,
+                    extra_points_made=2,
+                ),
+                week_row(
+                    2,
+                    player_id="kicker-1",
+                    position="K",
+                    field_goal_attempts=4,
+                    field_goals_made=4,
+                    extra_point_attempts=3,
+                    extra_points_made=3,
+                ),
+            ],
+            "source-k",
+        )
+    )
+    assert kicker_features[0].kicking_attempts_per_game_4 is None
+    assert kicker_features[1].kicking_attempts_per_game_4 == 3
+    assert kicker_features[1].kicking_conversion_rate_4 == pytest.approx(2 / 3)
+    defense_features = build_semantic_features(
+        curate_weeks(
+            [
+                week_row(
+                    1,
+                    player_id="def-chi",
+                    position="DEF",
+                    defensive_sacks=3,
+                    defensive_interceptions=1,
+                    defensive_fumble_recoveries=1,
+                    points_allowed=17,
+                ),
+                week_row(
+                    2,
+                    player_id="def-chi",
+                    position="DEF",
+                    defensive_sacks=2,
+                    defensive_interceptions=2,
+                    defensive_fumble_recoveries=0,
+                    points_allowed=21,
+                ),
+            ],
+            "source-def",
+        )
+    )
+    assert defense_features[1].defensive_sacks_per_game_4 == 3
+    assert defense_features[1].turnovers_forced_per_game_4 == 2
+    assert defense_features[1].points_allowed_per_game_4 == 17
+
+
+def test_pbp_transform_publishes_exact_kicker_and_team_defense_assets(tmp_path: Path) -> None:
+    base = {
+        "game_id": "2025_01_CHI_DET",
+        "home_team": "CHI",
+        "away_team": "DET",
+        "season": 2025,
+        "week": 1,
+        "total_home_score": 0,
+        "total_away_score": 0,
+        "field_goal_attempt": 0,
+        "extra_point_attempt": 0,
+        "sack": 0,
+        "interception": 0,
+        "fumble_lost": 0,
+        "return_touchdown": 0,
+    }
+    transformed = transform_pbp_k_def(
+        (
+            {
+                **base,
+                "posteam": "DET",
+                "defteam": "CHI",
+                "play_type": "pass",
+                "yards_gained": 7,
+                "sack": 1,
+                "interception": 1,
+            },
+            {
+                **base,
+                "posteam": "CHI",
+                "defteam": "DET",
+                "play_type": "field_goal",
+                "kicker_player_id": "00-kicker",
+                "kicker_player_name": "Kicker One",
+                "field_goal_attempt": 1,
+                "field_goal_result": "made",
+                "total_home_score": 3,
+            },
+            {
+                **base,
+                "posteam": "CHI",
+                "defteam": "DET",
+                "play_type": "extra_point",
+                "kicker_player_id": "00-kicker",
+                "kicker_player_name": "Kicker One",
+                "extra_point_attempt": 1,
+                "extra_point_result": "good",
+                "total_home_score": 10,
+            },
+            {
+                **base,
+                "posteam": "DET",
+                "defteam": "CHI",
+                "play_type": "pass",
+                "yards_gained": 0,
+                "return_touchdown": 1,
+                "td_team": "CHI",
+                "total_home_score": 17,
+            },
+            {
+                **base,
+                "season_type": "POST",
+                "posteam": "CHI",
+                "defteam": "DET",
+                "play_type": "field_goal",
+                "kicker_player_id": "00-postseason",
+                "kicker_player_name": "Postseason Kicker",
+                "field_goal_attempt": 1,
+                "field_goal_result": "made",
+            },
+        ),
+        source_updated_at="2026-08-22T00:00:00+00:00",
+    )
+    players = curate_players(transformed.players, "pbp-source-1")
+    weeks = curate_weeks(transformed.weeks, "pbp-source-1")
+    validate_curated_tables(players, weeks, {"K": 1, "DEF": 2})
+    chicago = next(row for row in weeks if row.source_player_id == "defense:CHI")
+    assert chicago.defensive_sacks == 1
+    assert chicago.defensive_interceptions == 1
+    assert chicago.defensive_touchdowns == 1
+    assert chicago.points_allowed == 0
+    assert chicago.yards_allowed == 7
+    kicker = next(row for row in weeks if row.source_player_id == "00-kicker")
+    assert kicker.field_goal_attempts == 1
+    assert kicker.extra_points_made == 1
+    assert all(row.source_player_id != "00-postseason" for row in players)
+    pipeline = IdentityPipeline.from_players(players)
+    assert (
+        pipeline.resolve(ExternalReference("nflverse", "defense:CHI", position="DEF")).state
+        == "resolved"
+    )
+    defense_id = pipeline.resolve(
+        ExternalReference("nflverse", "defense:CHI", position="DEF")
+    ).internal_player_id
+    assert defense_id is not None
+    provider_pipeline = IdentityPipeline(
+        players,
+        mappings=(
+            IdentityMapping(
+                "sleeper",
+                "fixture-team-defense-chi",
+                defense_id,
+                "provider_exact_v2",
+                "sanitized fixture",
+                asset_type="team_defense",
+            ),
+        ),
+    )
+    assert (
+        provider_pipeline.resolve(
+            ExternalReference("sleeper", "fixture-team-defense-chi", position="DEF")
+        ).state
+        == "resolved"
+    )
+    assert (
+        provider_pipeline.resolve(
+            ExternalReference("sleeper", "fixture-team-defense-chi", position="DEF", season=2026)
+        ).state
+        == "unresolved"
+    )
+    assert (
+        provider_pipeline.resolve(
+            ExternalReference("sleeper", "fixture-team-defense-chi", position="RB")
+        ).state
+        == "conflict"
+    )
+    assert (
+        pipeline.resolve(ExternalReference("nflverse", "00-kicker", position="K")).state
+        == "resolved"
+    )
+    kicker_id = pipeline.resolve(
+        ExternalReference("nflverse", "00-kicker", position="K")
+    ).internal_player_id
+    assert kicker_id is not None
+    prepared = prepare_baseline_pool(
+        (
+            (Resolution("resolved", kicker_id, "exact", "fixture"), "K", 11.0, "source-now"),
+            (Resolution("resolved", defense_id, "exact", "fixture"), "DEF", 9.0, "source-now"),
+        ),
+        "feature-v2",
+        "k-def-fixture-v1",
+        LeaguePreparationContext(8, ("K", "DEF", "BN"), frozenset({"RB", "WR", "TE"})),
+    )
+
+    player_path = tmp_path / "players.parquet"
+    week_path = tmp_path / "weeks.parquet"
+    prepared_path = tmp_path / "prepared.parquet"
+    write_curated_parquet(players, PLAYER_SCHEMA, player_path)
+    write_curated_parquet(weeks, WEEK_SCHEMA, week_path)
+    write_prepared_parquet(prepared, prepared_path)
+    files = {
+        "players.parquet": player_path.read_bytes(),
+        "weeks.parquet": week_path.read_bytes(),
+        "prepared.parquet": prepared_path.read_bytes(),
+    }
+    row_counts = {
+        "players.parquet": len(players),
+        "weeks.parquet": len(weeks),
+        "prepared.parquet": len(prepared),
+    }
+    outputs = tuple(
+        OutputFile(
+            name,
+            hashlib.sha256(payload).hexdigest(),
+            row_counts[name],
+        )
+        for name, payload in sorted(files.items())
+    )
+    manifest = dataset_manifest(
+        "k-def-fixture-v1",
+        "feature-v2",
+        "k-def-pbp-v1",
+        ("pbp-source-1",),
+        {"players": "v2", "player_week_features": "v2", "prepared": "v2"},
+        outputs,
+        {name: True for name in DatasetPublisher.REQUIRED_CHECKS},
+        ("CC BY 4.0",),
+    )
+    publisher = DatasetPublisher(tmp_path / "published")
+    publisher.publish(manifest, files, row_counts)
+    assert publisher.active_version() == ("k-def-fixture-v1", "feature-v2")
 
 
 def test_publication_is_atomic_and_retains_active_version(tmp_path: Path) -> None:

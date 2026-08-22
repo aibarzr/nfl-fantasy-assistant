@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-SUPPORTED_POSITIONS = frozenset({"QB", "RB", "WR", "TE"})
+SUPPORTED_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 
 
 class ProjectionError(ValueError):
@@ -39,6 +39,13 @@ class ProjectionFeatures:
     role_stability: float | None = None
     availability_rate: float | None = None
     historical_points_per_game: float | None = None
+    kicking_attempts_per_game: float | None = None
+    kicking_conversion_rate: float | None = None
+    extra_point_attempts_per_game: float | None = None
+    defensive_sacks_per_game: float | None = None
+    turnovers_forced_per_game: float | None = None
+    points_allowed_per_game: float | None = None
+    defensive_touchdowns_per_game: float | None = None
     source_updated_at: datetime | None = None
 
     def normalized(self) -> dict[str, float | None]:
@@ -59,6 +66,19 @@ class ProjectionFeatures:
             if self.availability_rate is not None
             else None,
             "historical_points": _normalized(self.historical_points_per_game, 30.0),
+            "kicking_attempts": _normalized(self.kicking_attempts_per_game, 5.0),
+            "kicking_conversion": _clamp(self.kicking_conversion_rate)
+            if self.kicking_conversion_rate is not None
+            else None,
+            "extra_point_opportunity": _normalized(self.extra_point_attempts_per_game, 5.0),
+            "defensive_sacks": _normalized(self.defensive_sacks_per_game, 5.0),
+            "turnovers_forced": _normalized(self.turnovers_forced_per_game, 4.0),
+            "points_allowed": (
+                _clamp(1.0 - self.points_allowed_per_game / 35.0)
+                if self.points_allowed_per_game is not None
+                else None
+            ),
+            "defensive_touchdowns": _normalized(self.defensive_touchdowns_per_game, 0.5),
         }
 
 
@@ -99,14 +119,16 @@ class ProjectionInput:
             raise ProjectionError("rookie projections require an explicit rookie prior")
         if not self.is_rookie and self.rookie_prior is not None:
             raise ProjectionError("veteran projections cannot include rookie-only prior inputs")
+        if self.position == "DEF" and self.is_rookie:
+            raise ProjectionError("team-defense assets cannot use rookie priors")
 
 
 @dataclass(frozen=True, slots=True)
 class ProjectionParameters:
     """All deterministic feature/scoring weights, with a reproducibility version."""
 
-    model_version: str = "projection-v1"
-    normalization_version: str = "semantic-v1"
+    model_version: str = "projection-v2"
+    normalization_version: str = "semantic-v2"
     stale_after_days: int = 14
     position_weights: Mapping[str, Mapping[str, float]] = field(
         default_factory=lambda: {
@@ -151,6 +173,23 @@ class ProjectionParameters:
                 "availability": 0.05,
                 "historical_points": 0.07,
             },
+            "K": {
+                "kicking_attempts": 0.35,
+                "kicking_conversion": 0.20,
+                "extra_point_opportunity": 0.15,
+                "role_stability": 0.10,
+                "availability": 0.10,
+                "historical_points": 0.10,
+            },
+            "DEF": {
+                "defensive_sacks": 0.20,
+                "turnovers_forced": 0.20,
+                "points_allowed": 0.20,
+                "defensive_touchdowns": 0.10,
+                "role_stability": 0.10,
+                "availability": 0.10,
+                "historical_points": 0.10,
+            },
         }
     )
     rookie_weights: Mapping[str, float] = field(
@@ -166,7 +205,7 @@ class ProjectionParameters:
         if not self.model_version or not self.normalization_version or self.stale_after_days < 1:
             raise ProjectionError("projection parameters require versions and positive freshness")
         if set(self.position_weights) != SUPPORTED_POSITIONS:
-            raise ProjectionError("position parameters must cover QB/RB/WR/TE exactly")
+            raise ProjectionError("position parameters must cover every supported position exactly")
         for weights in (*self.position_weights.values(), self.rookie_weights):
             if not weights or any(weight < 0 for weight in weights.values()):
                 raise ProjectionError("projection weights must be non-negative and non-empty")
@@ -200,6 +239,24 @@ def _scoring_adjustment(position: str, scoring_rules: Mapping[str, float]) -> fl
         return (passing + rushing) / 24.0
     if position == "RB":
         return (reception * 4 + rushing) / 16.0
+    if position == "K":
+        return (
+            float(scoring_rules.get("field_goals_made", 0.0)) * 2.0
+            + float(scoring_rules.get("field_goals_missed", 0.0)) * 0.5
+            + float(scoring_rules.get("extra_points_made", 0.0)) * 3.0
+            + float(scoring_rules.get("extra_points_missed", 0.0)) * 0.1
+        ) / 4.0
+    if position == "DEF":
+        return (
+            float(scoring_rules.get("defensive_sacks", 0.0)) * 3.0
+            + float(scoring_rules.get("defensive_interceptions", 0.0)) * 1.0
+            + float(scoring_rules.get("defensive_fumble_recoveries", 0.0)) * 1.0
+            + float(scoring_rules.get("defensive_touchdowns", 0.0)) * 0.1
+            + float(scoring_rules.get("defensive_safeties", 0.0)) * 0.05
+            + float(scoring_rules.get("defensive_blocked_kicks", 0.0)) * 0.1
+            + float(scoring_rules.get("points_allowed", 0.0)) * 18.0
+            + float(scoring_rules.get("yards_allowed", 0.0)) * 300.0
+        ) / 8.0
     return (reception * 5 + float(scoring_rules.get("receiving_yards", 0.0)) * 50) / 14.0
 
 

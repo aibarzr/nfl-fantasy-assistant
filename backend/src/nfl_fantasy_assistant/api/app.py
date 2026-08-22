@@ -14,7 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from nfl_fantasy_assistant.application.drafts import (
     ApplicationError,
@@ -31,6 +31,7 @@ from nfl_fantasy_assistant.domain.draft import (
     PlayerReference,
     RosterSlot,
 )
+from nfl_fantasy_assistant.domain.scoring import ScoringError, validate_scoring_rules
 from nfl_fantasy_assistant.persistence import SqliteDraftRepository
 
 API_VERSION = "v1"
@@ -76,7 +77,7 @@ class DiagnosticsResponse(ProtocolModel):
 
 class RosterSlotInput(ProtocolModel):
     name: str = Field(min_length=1, max_length=32)
-    eligible_positions: set[Literal["QB", "RB", "WR", "TE"]] = Field(min_length=1)
+    eligible_positions: set[Literal["QB", "RB", "WR", "TE", "K", "DEF"]] = Field(min_length=1)
     is_bench: bool = False
 
 
@@ -88,6 +89,15 @@ class LeagueConfigInput(ProtocolModel):
     scoring_rules: dict[str, float] = Field(default_factory=dict, max_length=64)
     superflex: bool = False
     te_premium: float = Field(default=0, ge=0, le=10)
+
+    @field_validator("scoring_rules")
+    @classmethod
+    def supported_scoring_rules(cls, value: dict[str, float]) -> dict[str, float]:
+        try:
+            validate_scoring_rules(value)
+        except ScoringError as error:
+            raise ValueError(str(error)) from error
+        return value
 
     def to_domain(self) -> LeagueConfig:
         return LeagueConfig(
@@ -108,7 +118,7 @@ class PlayerReferenceInput(ProtocolModel):
     provider: str = Field(min_length=1, max_length=64)
     external_id: str = Field(min_length=1, max_length=MAX_TEXT_LENGTH)
     name: str | None = Field(default=None, max_length=MAX_TEXT_LENGTH)
-    position: Literal["QB", "RB", "WR", "TE"] | None = None
+    position: Literal["QB", "RB", "WR", "TE", "K", "DEF"] | None = None
     nfl_team: str | None = Field(default=None, min_length=2, max_length=4)
 
     def to_domain(self) -> PlayerReference:

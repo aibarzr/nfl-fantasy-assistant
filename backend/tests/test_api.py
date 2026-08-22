@@ -138,6 +138,33 @@ def test_api_returns_protocol_validation_envelope_without_state_mutation(tmp_pat
         assert malformed.json()["error"]["request_id"].startswith("req_")
 
 
+def test_api_accepts_k_and_def_and_rejects_unknown_scoring_semantics(tmp_path: Path) -> None:
+    token = generate_token()
+    app = create_app(tmp_path / "drafts.sqlite3", token, ORIGIN)
+    config: dict[str, object] = {
+        "config_version": "v1",
+        "team_count": 8,
+        "draft_type": "snake",
+        "roster_slots": [
+            {"name": "K", "eligible_positions": ["K"], "is_bench": False},
+            {"name": "DEF", "eligible_positions": ["DEF"], "is_bench": False},
+        ],
+        "scoring_rules": {"field_goals_made": 3.0, "defensive_sacks": 1.0},
+    }
+    payload: dict[str, object] = {
+        "provider": "espn",
+        "provider_league_id": "league-k-def",
+        "config": config,
+    }
+    with TestClient(app) as client:
+        accepted = client.post("/v1/leagues", json=payload, headers=headers(token))
+        assert accepted.status_code == 200
+        config["scoring_rules"] = {"unknown_rule": 1.0}
+        rejected = client.post("/v1/leagues", json=payload, headers=headers(token))
+        assert rejected.status_code == 422
+        assert rejected.json()["error"]["code"] == "validation_error"
+
+
 def test_api_rejects_disallowed_origins_and_oversized_mutations_without_draft_state(
     tmp_path: Path,
 ) -> None:

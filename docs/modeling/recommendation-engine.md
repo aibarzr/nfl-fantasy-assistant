@@ -12,7 +12,13 @@ Historical features influence projection and must not be added again directly to
 
 ## Projection baseline
 
-Start with deterministic position-specific weighted models over prepared semantic features. QB explicitly models rushing; RB receiving involvement responds to PPR; WR prioritizes target/air-yard opportunity; TE includes receiving role and later positional advantage. Availability, role stability, high-value usage, and efficiency remain distinct explainable inputs.
+Start with deterministic position-specific weighted models over prepared semantic features. QB
+explicitly models rushing; RB receiving involvement responds to PPR; WR prioritizes target/air-yard
+opportunity; TE includes receiving role and later positional advantage. K uses documented kicking
+opportunity and conversion inputs; `DEF` uses documented team-defense scoring inputs. K is projected
+as an individual player and `DEF` as a team asset. Neither model may be enabled until its source
+coverage, scoring semantics, confidence behavior, and validation segment are versioned.
+Availability, role stability, high-value usage, and efficiency remain distinct explainable inputs.
 
 Rookies follow a separate projector because missing NFL history is not negative evidence. The initial configurable prior is 50% ECR, 25% draft capital, 15% expected role/depth chart, and 10% athletic profile. NCAA production remains deferred.
 
@@ -74,7 +80,10 @@ Explanations must reflect the actual calculation; they are not post-hoc generic 
 
 Evaluate projection independently with MAE/RMSE, Spearman correlation, top-N and position-specific ranking quality. Evaluate decisions through deterministic historical draft simulations against ECR-only, ADP-only, best-player-available, static VOR, dynamic VOR, and incremental full-engine baselines.
 
-Measure roster value, actual historical fantasy output without leakage, positional advantage, replacement value, and value captured. Segment results by position, league format, draft slot/stage, rookies, and confidence.
+Measure roster value, actual historical fantasy output without leakage, positional advantage,
+replacement value, and value captured. Segment results by position (including K and DEF), league
+format, draft slot/stage, rookies, and confidence. A K/DEF model must not be promoted on aggregate
+metrics alone when its position segment regresses or lacks coverage.
 
 A model version is promoted only when:
 

@@ -148,6 +148,8 @@ class NflreadpyFetcher:
     _LOADERS: dict[str, Any] = {
         "players": nfl.load_players,
         "player_stats": nfl.load_player_stats,
+        "team_stats": nfl.load_team_stats,
+        "pbp": nfl.load_pbp,
         "rosters": nfl.load_rosters,
         "snap_counts": nfl.load_snap_counts,
         "depth_charts": nfl.load_depth_charts,

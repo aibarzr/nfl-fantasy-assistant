@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from nfl_fantasy_assistant.domain.draft import (
+    AssetType,
     DraftId,
     DraftPick,
     DraftSession,
@@ -89,6 +90,7 @@ def _player_to_json(player: Player) -> str:
             "position": player.position,
             "nfl_team": player.nfl_team,
             "identity_state": player.identity_state.value,
+            "asset_type": (player.asset_type or AssetType.PLAYER).value,
         }
     )
 
@@ -102,6 +104,7 @@ def _player_from_json(value: str) -> Player:
         position=raw["position"],
         nfl_team=raw["nfl_team"],
         identity_state=IdentityState(raw["identity_state"]),
+        asset_type=AssetType(raw["asset_type"]) if raw.get("asset_type") else None,
     )
 
 

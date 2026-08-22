@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from .curation import CuratedPlayer
 from .errors import DataValidationError
 
-IDENTITY_RULE_VERSION = "1"
+IDENTITY_RULE_VERSION = "2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +22,7 @@ class ExternalReference:
     display_name: str | None = None
     nfl_team: str | None = None
     position: str | None = None
+    season: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +33,7 @@ class IdentityMapping:
     method: str
     provenance: str
     state: str = "accepted"
+    asset_type: str = "player"
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +59,8 @@ class Resolution:
 def _internal_id(player: CuratedPlayer) -> str:
     anchor = player.gsis_id or player.source_player_id
     digest = hashlib.sha256(f"nfl-fantasy-assistant:{anchor}".encode()).hexdigest()[:24]
-    return f"player-{digest}"
+    prefix = "defense" if player.asset_type == "team_defense" else "player"
+    return f"{prefix}-{digest}"
 
 
 def normalize_name(name: str) -> str:
@@ -79,9 +82,25 @@ class IdentityPipeline:
         self._internal = {
             source_id: _internal_id(player) for source_id, player in self._players.items()
         }
+        self._asset_type_by_internal = {
+            self._internal[source_id]: player.asset_type
+            for source_id, player in self._players.items()
+        }
+        self._validity_by_internal = {
+            self._internal[source_id]: (player.valid_from_season, player.valid_through_season)
+            for source_id, player in self._players.items()
+        }
         self._exact: dict[tuple[str, str], IdentityMapping] = {}
         self._overrides: dict[tuple[str, str], ManualOverride] = {}
         for mapping in mappings:
+            if mapping.asset_type not in {"player", "team_defense"}:
+                raise DataValidationError(f"unsupported mapping asset type: {mapping.asset_type}")
+            if mapping.internal_player_id not in self._asset_type_by_internal:
+                raise DataValidationError("provider mapping targets an unknown internal asset")
+            if self._asset_type_by_internal[mapping.internal_player_id] != mapping.asset_type:
+                raise DataValidationError(
+                    "provider mapping asset type conflicts with internal asset"
+                )
             key = (mapping.provider, mapping.external_id)
             if key in self._exact:
                 raise DataValidationError(f"duplicate provider ID: {key}")
@@ -94,6 +113,8 @@ class IdentityPipeline:
             key = (override.provider, override.external_id)
             if key in self._overrides:
                 raise DataValidationError(f"duplicate manual override: {key}")
+            if override.internal_player_id not in self._asset_type_by_internal:
+                raise DataValidationError("manual override targets an unknown internal asset")
             self._overrides[key] = override
 
     @classmethod
@@ -111,6 +132,7 @@ class IdentityPipeline:
                     internal_player_id=_internal_id(player),
                     method="authoritative_gsis" if player.gsis_id else "source_stable_id",
                     provenance=f"curated:{player.lineage_manifest_id}",
+                    asset_type=player.asset_type,
                 )
             )
         return cls(materialized, mappings)
@@ -120,15 +142,53 @@ class IdentityPipeline:
             key = (reference.provider, reference.external_id)
             override = self._overrides.get(key)
             if override:
+                expected_asset_type = "team_defense" if reference.position == "DEF" else "player"
+                if (
+                    reference.position is not None
+                    and self._asset_type_by_internal[override.internal_player_id]
+                    != expected_asset_type
+                ):
+                    return Resolution(
+                        "conflict",
+                        None,
+                        None,
+                        "manual override has an incompatible asset type",
+                    )
                 return Resolution(
                     "resolved", override.internal_player_id, "manual_override", override.provenance
                 )
             exact = self._exact.get(key)
             if exact:
+                expected_asset_type = "team_defense" if reference.position == "DEF" else "player"
+                if reference.position is not None and exact.asset_type != expected_asset_type:
+                    return Resolution(
+                        "conflict",
+                        None,
+                        None,
+                        "exact provider mapping has an incompatible asset type",
+                    )
+                valid_from, valid_through = self._validity_by_internal[exact.internal_player_id]
+                if reference.season is not None and (
+                    (valid_from is not None and reference.season < valid_from)
+                    or (valid_through is not None and reference.season > valid_through)
+                ):
+                    return Resolution(
+                        "unresolved",
+                        None,
+                        None,
+                        "exact provider mapping is outside the asset validity period",
+                    )
                 return Resolution(
                     "resolved", exact.internal_player_id, exact.method, exact.provenance
                 )
 
+        if reference.position == "DEF":
+            return Resolution(
+                "unresolved",
+                None,
+                None,
+                "team-defense references require an exact provider mapping",
+            )
         if not reference.display_name:
             return Resolution("unresolved", None, None, "missing external ID and display evidence")
         candidates = [
