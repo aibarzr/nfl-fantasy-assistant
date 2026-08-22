@@ -2,7 +2,7 @@
 
 - Status: Blocked
 - Resolution: Unresolved
-- Phase: 5 — ESPN live loop
+- Phase: 5 — Live platform loops
 - Owner: Codex
 - Created: 2026-07-29
 - Updated: 2026-07-31

@@ -20,6 +20,18 @@ and the configured exact extension origin. Draft-state mutations expose their re
 An unavailable or non-current recommendation returns a stable `503` error rather than labeling an
 older result as current.
 
+## Approved provider expansion
+
+Sleeper is an approved second league provider, but it is not yet accepted by the implemented v1
+OpenAPI. The Sleeper discovery and implementation tickets must extend the authoritative FastAPI
+models, regenerate OpenAPI and the TypeScript consumer, and add compatibility tests together.
+Until then, the current generated contract correctly rejects Sleeper event and snapshot values.
+
+The intended additive v1 change is to accept `sleeper` as a league provider and browser surface,
+a precise structured snapshot source such as `sleeper_api`, and the MVP draft positions `K` and
+`DEF`. `DEF` denotes a team-defense asset, not a player-name alias. Exact enum names and validation
+limits remain owned by the generated OpenAPI rather than this prose.
+
 ## Common rules
 
 - JSON field names use `snake_case` on the wire.
@@ -89,6 +101,11 @@ scoring codes must be translated through a versioned adapter codebook before the
 semantic league configuration. Partial snapshots may diagnose or append evidence but cannot prove
 that accepted state should be deleted.
 
+For Sleeper, a documented API response can be a complete snapshot only after the adapter validates
+its draft identity, ordering, and declared-completeness semantics against sanitized discovery
+evidence. A polling cycle is not itself a second canonical state owner; duplicate events and
+snapshots remain safe to resend to the backend.
+
 ## Idempotency, ordering, and conflicts
 
 - `event_id` is the idempotency key within a draft.
@@ -99,7 +116,10 @@ that accepted state should be deleted.
 
 ## Recommendations
 
-Each candidate contains internal player ID, rank, draft score, confidence, normalized component scores, concise reason codes/text, and relevant uncertainty/freshness warnings. The response contains draft revision, generated timestamp, model version, feature version, dataset version, and source-update metadata.
+Each candidate contains internal draftable-asset ID, rank, draft score, confidence, normalized
+component scores, concise reason codes/text, and relevant uncertainty/freshness warnings. The
+response contains draft revision, generated timestamp, model version, feature version, dataset
+version, and source-update metadata.
 
 If state is blocked or inputs violate freshness policy, the endpoint returns an explicit non-current status and issues; it must not label an old result as current.
 

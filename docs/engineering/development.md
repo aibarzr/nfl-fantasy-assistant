@@ -2,10 +2,10 @@
 
 ## Toolchain status
 
-The Phase 0 scaffold uses uv 0.12.0 with Python 3.14.4 for the backend, and npm with Node
-22.18.0 for the extension. Backend dependencies are locked in `backend/uv.lock`; extension
-dependencies are locked in `extension/package-lock.json`. FastAPI is a dependency boundary only
-at this stage—its runtime API is introduced in NFL-0017.
+The Phase 5 project uses uv 0.12.0 with Python 3.14.4 for the backend, and npm with Node 22.18.0
+for the extension. Backend dependencies are locked in `backend/uv.lock`; extension dependencies
+are locked in `extension/package-lock.json`. FastAPI/OpenAPI is the implemented local protocol
+boundary.
 
 Run these commands from the repository root. They are intentionally identical to the command
 table in `AGENTS.md`.
@@ -13,7 +13,7 @@ table in `AGENTS.md`.
 | Component | Install | Format | Format check | Lint | Type-check | Test | Build | Run |
 |---|---|---|---|---|---|---|---|---|
 | Backend | `uv --directory backend sync --all-groups --frozen` | `uv --directory backend run ruff format .` | `uv --directory backend run ruff format --check .` | `uv --directory backend run ruff check .` | `uv --directory backend run mypy src tests` | `uv --directory backend run pytest` | `uv --directory backend build` | `uv --directory backend run python -m nfl_fantasy_assistant --help` |
-| Extension | `npm --prefix extension ci` | `npm --prefix extension run format` | `npm --prefix extension run format:check` | `npm --prefix extension run lint` | `npm --prefix extension run typecheck` | `npm --prefix extension test` | `npm --prefix extension run build` | Load `extension/dist` as an unpacked extension after the build; it has no active platform behavior in Phase 0. |
+| Extension | `npm --prefix extension ci` | `npm --prefix extension run format` | `npm --prefix extension run format:check` | `npm --prefix extension run lint` | `npm --prefix extension run typecheck` | `npm --prefix extension test` | `npm --prefix extension run build` | Load `extension/dist` as an unpacked extension only to validate a provider adapter; no provider has yet passed the full live-loop acceptance fixture. |
 
 Contract generation/checking does not exist until the FastAPI/OpenAPI boundary is introduced;
 do not substitute handwritten wire types for it. The repository-wide command and CI workflow are
@@ -76,15 +76,22 @@ Use explicit types at boundaries and pure functions for scoring/state rules wher
 
 ### Extension
 
-Test hostname/surface detection, adapter parsing, structured and DOM fallbacks, snapshot extraction/completeness, event-ID creation/deduplication, protocol serialization, status UI, and service-worker/page recovery. Use saved sanitized HTML/response fixtures; normal CI must not depend on live ESPN/FantasyPros pages.
+Test hostname/surface detection, adapter parsing, documented provider-API and DOM fallbacks,
+snapshot extraction/completeness, event-ID creation/deduplication, protocol serialization, status
+UI, and service-worker/page recovery. Use saved sanitized HTML/response fixtures; normal CI must
+not depend on live ESPN, Sleeper, or FantasyPros pages.
 
 ### Backend
 
-Test domain invariants, scoring rules, identity outcomes, draft transitions, idempotency, snapshot reconciliation/conflicts, replacement level, VOR, scarcity, urgency, roster constraints, persistence/restart, error mapping, and reproducibility.
+Test domain invariants, scoring rules, identity outcomes (including individual K and team-defense
+assets), draft transitions, idempotency, snapshot reconciliation/conflicts, replacement level,
+VOR, scarcity, urgency, roster constraints, persistence/restart, error mapping, and reproducibility.
 
 ### Data and models
 
-Test schema/lineage checks, transformations on small fixtures, time-safe feature generation, scoring at each position, normalization, explanation fidelity, model-version pinning, and deterministic backtests.
+Test schema/lineage checks, transformations on small fixtures, time-safe feature generation,
+scoring at each position (including K/DEF), normalization, explanation fidelity, model-version
+pinning, and deterministic backtests.
 
 ### Integration and performance
 

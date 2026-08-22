@@ -2,7 +2,7 @@
 
 - Status: Backlog
 - Resolution: Unresolved
-- Phase: 5 — ESPN live loop
+- Phase: 5 — Live platform loops
 - Owner: Unassigned
 - Created: 2026-07-29
 - Updated: 2026-07-29
@@ -36,4 +36,3 @@ Replace every placeholder with actual supported commands, versions, configuratio
 ## History
 
 - 2026-07-29 — Created in Backlog.
-

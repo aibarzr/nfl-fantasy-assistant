@@ -2,13 +2,15 @@
 
 ## Current limitation
 
-Phase 3 provides the loopback HTTP runtime, SQLite draft persistence, and authenticated draft
-core. It does not yet load a runtime prepared-player dataset, calculate recommendations, or
-observe a live browser surface; diagnostics report those dependencies as unavailable.
+The backend draft core and deterministic recommendation engine are implemented. The ESPN live
+adapter remains blocked on validated initialization/recovery evidence. Sleeper is approved for a
+read-only discovery spike only and must not be used for a live draft until its adapter, identity
+mapping, recovery evidence, and end-to-end acceptance fixture are complete. Neutral K/DEF
+domain-data-model support is complete.
 
 ## Installation and startup checklist
 
-The supported Phase 3 startup procedure is:
+The supported local startup procedure is:
 
 1. Run `uv --directory backend sync --all-groups --frozen` and `npm --prefix extension ci`.
 2. Generate a locally stored token with `uv --directory backend run python -m nfl_fantasy_assistant pair init --config-dir <config-dir>`.
@@ -18,8 +20,8 @@ The supported Phase 3 startup procedure is:
    `[runtime]` section; see `backend/config.example.toml`.
 5. Run `./scripts/quality.sh all`, then start the loopback service with
    `uv --directory backend run python -m nfl_fantasy_assistant serve --config-dir <config-dir>`.
-6. Load `extension/dist` unpacked only to inspect the scaffold; no live adapter behavior exists
-   until Phase 5.
+6. Load `extension/dist` unpacked only after the relevant provider adapter has passed its release
+   checks; an unsupported or discovery-only provider must display a non-current state.
 
 `GET /v1/health` confirms liveness without credentials. Use authenticated `GET /v1/diagnostics`
 from the extension context to identify database, data/model, identity, adapter, and recommendation
@@ -30,9 +32,13 @@ other than the configured extension origin.
 
 - Backend health and authenticated diagnostics are green.
 - League format and user draft slot match the platform.
+- Every configured position, including K and DEF where present, has a supported identity route,
+  prepared-value coverage, and versioned scoring translation.
 - Dataset and market-source timestamps meet configured freshness policy.
 - Model/data versions are pinned for the session.
 - Initial snapshot pick count, order, rosters, and unresolved-player count are visible.
+- Provider API freshness, rate-limit/backoff state, and complete-snapshot status are green when a
+  provider adapter uses a documented structured API.
 - Recommendation fixture/smoke check completes within the performance budget.
 - There is sufficient local disk space and the SQLite database is writable.
 
@@ -43,6 +49,9 @@ Do not proceed with trusted recommendations while configuration, identity, or re
 ### Extension or page reload
 
 Reload/reopen the supported page. The extension must reconnect, fetch or submit a complete-enough snapshot, and resume the existing internal draft ID. Confirm canonical pick count and current recommendation revision before relying on it.
+
+For a Sleeper adapter, the service worker must obtain a fresh validated API snapshot after reload;
+it must not recover from a cached page DOM or an unverified local pick list.
 
 ### Backend restart
 

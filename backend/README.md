@@ -1,9 +1,10 @@
 # Backend draft core
 
-This package provides the Phase 3 loopback draft core in addition to the Phase 2 offline data
-foundation. It exposes a FastAPI v1 boundary, SQLite-backed canonical draft state, idempotent
-observations, reconciliation, and reproducible recommendation-snapshot persistence. Deterministic
-projection and recommendation calculations remain Phase 4 work.
+This package provides the offline data foundation, loopback draft core, and deterministic baseline
+recommendation engine. It exposes a FastAPI v1 boundary, SQLite-backed canonical draft state,
+idempotent observations, reconciliation, reproducible recommendation-snapshot persistence, and
+versioned projection, valuation, replacement, and draft-ranking components. Platform observation
+remains an extension-adapter responsibility.
 
 `src/nfl_fantasy_assistant/domain` is framework- and persistence-independent. Outer adapters
 belong in `api`, `data`, and `persistence`; application orchestration belongs in `application`.

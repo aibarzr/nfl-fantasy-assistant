@@ -4,15 +4,21 @@ A local, browser-assisted decision-support tool for NFL fantasy drafts. A thin C
 
 ## Status
 
-The project is in Phase 0: repository scaffolding. The backend and extension toolchains are
-available, but there is no live draft runtime yet.
+The project is in Phase 5: live platform loops. The backend draft core and deterministic
+recommendation engine are implemented; the ESPN loop is partially implemented but blocked on
+validated initialization and recovery evidence. Sleeper has been approved as a separate,
+extension-bound adapter; its read-only discovery spike is active. Kicker and team-defense support
+are implemented in the neutral backend/data/model; Sleeper still requires its own validated
+adapter and identity/recovery evidence before a league can initialize.
 
-The first production target is an ESPN-backed 8-team snake draft, with recommendations refreshed in under one second. See the [MVP specification](docs/product/mvp-spec.md) for the exact boundary.
+The supported target scope is an 8-team NFL snake redraft on ESPN or Sleeper, with
+recommendations refreshed in under one second under the deterministic fixture workload. See the
+[MVP specification](docs/product/mvp-spec.md) for the exact boundary.
 
 ## Architecture
 
 ```text
-ESPN/FantasyPros page
+ESPN/Sleeper page
         |
 Chromium extension (observe, normalize, render)
         |
@@ -39,8 +45,9 @@ committed.
 ## Development
 
 Install and quality commands are in [the development guide](docs/engineering/development.md) and
-`AGENTS.md`. The current scaffold is intentionally inert: it has no platform host permissions,
-HTTP API, persistence, or recommendation behavior.
+`AGENTS.md`. The local runtime requires installed dependencies, private pairing configuration,
+and a published prepared dataset; it is not ready for a live draft until the relevant provider
+adapter has passed its acceptance evidence.
 
 Start with:
 
