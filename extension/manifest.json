@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "NFL Fantasy Assistant",
+  "version": "0.0.1",
+  "description": "Local ESPN draft assistant.",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*", "https://fantasy.espn.com/*"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://fantasy.espn.com/football/draft*"],
+      "js": ["content/index.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

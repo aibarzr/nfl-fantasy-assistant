@@ -1,0 +1,99 @@
+{
+  "fixture_metadata": {
+    "source_class": "sanitized_derived_capture",
+    "surface": "espn_draft",
+    "league_provider": "espn",
+    "captured_on": "2026-07-30",
+    "sanitization": {
+      "removed": [
+        "all request URLs and headers",
+        "session credentials",
+        "direct account-scope identifiers",
+        "display names, logos, and unrelated payload fields"
+      ],
+      "team_references": "Stable fixture-local aliases in scheduled-draft-order order."
+    },
+    "completeness": "one observed ESPN player reference per position code; no name-based identity data retained",
+    "expected_parser_outcome": "provider and external_id form the primary reference; position/team codes are corroborating attributes only"
+  },
+  "player_references": [
+    {
+      "provider": "espn",
+      "external_id": "5529",
+      "position_code": 1,
+      "pro_team_code": 11,
+      "eligible_slot_codes": [
+        0,
+        7,
+        20,
+        21
+      ]
+    },
+    {
+      "provider": "espn",
+      "external_id": "4036032",
+      "position_code": 2,
+      "pro_team_code": 3,
+      "eligible_slot_codes": [
+        2,
+        3,
+        23,
+        7,
+        20,
+        21
+      ]
+    },
+    {
+      "provider": "espn",
+      "external_id": "4685261",
+      "position_code": 3,
+      "pro_team_code": 23,
+      "eligible_slot_codes": [
+        25,
+        3,
+        4,
+        5,
+        23,
+        7,
+        20,
+        21
+      ]
+    },
+    {
+      "provider": "espn",
+      "external_id": "4429262",
+      "position_code": 4,
+      "pro_team_code": 23,
+      "eligible_slot_codes": [
+        5,
+        6,
+        23,
+        7,
+        20,
+        21
+      ]
+    },
+    {
+      "provider": "espn",
+      "external_id": "3124679",
+      "position_code": 5,
+      "pro_team_code": 20,
+      "eligible_slot_codes": [
+        17,
+        20,
+        21
+      ]
+    },
+    {
+      "provider": "espn",
+      "external_id": "-16001",
+      "position_code": 16,
+      "pro_team_code": 1,
+      "eligible_slot_codes": [
+        16,
+        20,
+        21
+      ]
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import pytest
+
+from nfl_fantasy_assistant.models.metrics import projection_metrics
+from nfl_fantasy_assistant.models.projection import (
+    ProjectionError,
+    ProjectionFeatures,
+    ProjectionInput,
+    ProjectionParameters,
+    RookiePrior,
+    project_player,
+)
+
+NOW = datetime(2026, 8, 1, tzinfo=UTC)
+SCORING = {
+    "passing_yards": 0.04,
+    "passing_touchdowns": 4.0,
+    "rushing_yards": 0.1,
+    "receptions": 1.0,
+    "receiving_yards": 0.1,
+}
+
+
+def features(**overrides: object) -> ProjectionFeatures:
+    values: dict[str, Any] = {
+        "usage_per_game": 18.0,
+        "opportunity_per_game": 20.0,
+        "efficiency_per_opportunity": 1.0,
+        "high_value_usage_per_game": 2.0,
+        "receiving_role": 0.6,
+        "rushing_role": 0.4,
+        "role_stability": 0.8,
+        "availability_rate": 0.9,
+        "historical_points_per_game": 16.0,
+        "source_updated_at": NOW,
+    }
+    values.update(overrides)
+    return ProjectionFeatures(**values)
+
+
+@pytest.mark.parametrize("position", ("QB", "RB", "WR", "TE"))
+def test_position_projectors_are_deterministic_and_position_specific(position: str) -> None:
+    projection = project_player(
+        ProjectionInput(f"player-{position}", position, features()), SCORING, now=NOW
+    )
+    replay = project_player(
+        ProjectionInput(f"player-{position}", position, features()), SCORING, now=NOW
+    )
+    assert projection == replay
+    assert projection.floor_points < projection.expected_points < projection.ceiling_points
+    assert projection.model_version == "projection-v1"
+    if position == "QB":
+        assert "rushing_role" in projection.components
+    if position in {"RB", "WR", "TE"}:
+        assert "receiving_role" in projection.components
+
+
+def test_ppr_and_stale_feature_inputs_change_scoring_and_confidence_explicitly() -> None:
+    player = ProjectionInput("receiver", "WR", features())
+    standard = project_player(player, {"receiving_yards": 0.1}, now=NOW)
+    ppr = project_player(player, {"receiving_yards": 0.1, "receptions": 1.0}, now=NOW)
+    stale = project_player(
+        ProjectionInput("stale", "WR", features(source_updated_at=NOW - timedelta(days=15))),
+        SCORING,
+        now=NOW,
+    )
+    assert ppr.expected_points > standard.expected_points
+    assert stale.confidence < ppr.confidence
+    assert "stale_features" in stale.warnings
+
+
+def test_rookie_uses_documented_prior_without_missing_history_penalty() -> None:
+    rookie = project_player(
+        ProjectionInput(
+            "rookie",
+            "RB",
+            ProjectionFeatures(source_updated_at=NOW),
+            is_rookie=True,
+            rookie_prior=RookiePrior(ecr_rank=20, draft_capital_score=0.8, expected_role_score=0.7),
+        ),
+        SCORING,
+        now=NOW,
+    )
+    assert rookie.expected_points > 0
+    assert "rookie_ecr" in rookie.components
+    assert "rookie_prior" in rookie.warnings
+    assert rookie.confidence > 0.45
+    with pytest.raises(ProjectionError, match="rookie prior"):
+        ProjectionInput("bad-rookie", "RB", features(), is_rookie=True)
+
+
+def test_parameter_validation_and_timezone_requirements_are_visible() -> None:
+    with pytest.raises(ProjectionError, match="sum to one"):
+        ProjectionParameters(rookie_weights={"ecr": 1.0, "draft_capital": 1.0})
+    with pytest.raises(ProjectionError, match="timezone"):
+        project_player(
+            ProjectionInput("naive", "WR", features(source_updated_at=datetime(2026, 8, 1))),
+            SCORING,
+            now=NOW,
+        )
+
+
+def test_projection_metrics_are_deterministic_and_segmented_by_position() -> None:
+    metrics = projection_metrics((("QB", 20.0, 18.0), ("QB", 10.0, 12.0), ("RB", 15.0, 14.0)))
+    assert metrics.count == 3
+    assert metrics.mae == pytest.approx(1.666667)
+    assert metrics.by_position["QB"].spearman == pytest.approx(1.0)

@@ -1,0 +1,42 @@
+# Architecture Decision Records
+
+Use an ADR for a decision that changes a costly-to-reverse architectural boundary, contract owner, persistence approach, trust boundary, or major dependency. Routine implementation details belong in code and its tests.
+
+## Naming
+
+Use `NNNN-short-kebab-title.md`, starting at `0001`. Never renumber accepted records. Superseded records remain in place and link to their replacement.
+
+## Statuses
+
+`Proposed`, `Accepted`, `Superseded`, or `Rejected`.
+
+## Template
+
+```markdown
+# NNNN — Decision title
+
+- Status: Proposed
+- Date: YYYY-MM-DD
+- Supersedes: none
+
+## Context
+
+What forces and constraints require a decision?
+
+## Decision
+
+What is the chosen behavior or boundary?
+
+## Consequences
+
+What becomes easier, harder, required, or deliberately unsupported?
+
+## Alternatives considered
+
+Which credible alternatives were rejected, and why?
+```
+
+The existing baseline decisions are captured in the project principles and architecture overview. Create individual ADRs when implementation validates or changes a decision whose rationale must be preserved; do not manufacture retrospective records for every guideline.
+# Architecture Decisions
+
+- [ADR-0001: Local token pairing](0001-local-token-pairing.md)

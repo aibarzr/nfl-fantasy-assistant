@@ -1,0 +1,10 @@
+# Non-secret backend configuration example. Copy this to the chosen local configuration directory.
+[backend]
+host = "127.0.0.1"
+port = 8765
+
+# Replace this with the installed extension's exact origin. The database remains rooted under
+# this private configuration directory, rather than accepting a machine-specific absolute path.
+[runtime]
+extension_origin = "chrome-extension://replace-with-installed-extension-id"
+database_file = "nfl-fantasy-assistant.sqlite3"

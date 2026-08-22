@@ -1,0 +1,1253 @@
+{
+  "components": {
+    "schemas": {
+      "ComponentReadiness": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "unavailable",
+              "degraded"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "detail"
+        ],
+        "title": "ComponentReadiness",
+        "type": "object"
+      },
+      "DiagnosticsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "adapter": {
+            "$ref": "#/components/schemas/ComponentReadiness"
+          },
+          "api_version": {
+            "const": "v1",
+            "title": "Api Version",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ComponentReadiness"
+          },
+          "database": {
+            "$ref": "#/components/schemas/ComponentReadiness"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/ComponentReadiness"
+          },
+          "recommendations": {
+            "$ref": "#/components/schemas/ComponentReadiness"
+          }
+        },
+        "required": [
+          "api_version",
+          "database",
+          "data",
+          "identity",
+          "adapter",
+          "recommendations"
+        ],
+        "title": "DiagnosticsResponse",
+        "type": "object"
+      },
+      "DraftCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/LeagueConfigInput"
+          },
+          "dataset_version": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Dataset Version",
+            "type": "string"
+          },
+          "draft_order": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1024,
+            "minItems": 1,
+            "title": "Draft Order",
+            "type": "array"
+          },
+          "feature_version": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Feature Version",
+            "type": "string"
+          },
+          "initial_picks": {
+            "items": {
+              "$ref": "#/components/schemas/ObservedPickInput"
+            },
+            "maxItems": 256,
+            "title": "Initial Picks",
+            "type": "array"
+          },
+          "league_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "League Id",
+            "type": "string"
+          },
+          "model_version": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Model Version",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_draft_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Provider Draft Id",
+            "type": "string"
+          },
+          "user_slot": {
+            "maximum": 1024.0,
+            "minimum": 1.0,
+            "title": "User Slot",
+            "type": "integer"
+          },
+          "user_team_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "User Team Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "league_id",
+          "provider",
+          "provider_draft_id",
+          "config",
+          "user_team_id",
+          "user_slot",
+          "draft_order",
+          "dataset_version",
+          "feature_version",
+          "model_version"
+        ],
+        "title": "DraftCreateRequest",
+        "type": "object"
+      },
+      "DraftStateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_picks": {
+            "title": "Accepted Picks",
+            "type": "integer"
+          },
+          "current_pick": {
+            "title": "Current Pick",
+            "type": "integer"
+          },
+          "dataset_version": {
+            "title": "Dataset Version",
+            "type": "string"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "feature_version": {
+            "title": "Feature Version",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "league_id": {
+            "title": "League Id",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "reconciliation_state": {
+            "title": "Reconciliation State",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "unresolved_observations": {
+            "title": "Unresolved Observations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "draft_id",
+          "league_id",
+          "status",
+          "reconciliation_state",
+          "revision",
+          "current_pick",
+          "dataset_version",
+          "feature_version",
+          "model_version",
+          "accepted_picks",
+          "unresolved_observations",
+          "issues"
+        ],
+        "title": "DraftStateResponse",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id",
+          "retryable"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "ErrorEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorEnvelope",
+        "type": "object"
+      },
+      "EventRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Event Id",
+            "type": "string"
+          },
+          "league_provider": {
+            "const": "espn",
+            "title": "League Provider",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "pick": {
+            "$ref": "#/components/schemas/ObservedPickInput"
+          },
+          "protocol_version": {
+            "const": "v1",
+            "default": "v1",
+            "title": "Protocol Version",
+            "type": "string"
+          },
+          "surface": {
+            "enum": [
+              "espn",
+              "fantasypros"
+            ],
+            "title": "Surface",
+            "type": "string"
+          },
+          "type": {
+            "const": "player_drafted",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "observed_at",
+          "surface",
+          "league_provider",
+          "type",
+          "pick"
+        ],
+        "title": "EventRequest",
+        "type": "object"
+      },
+      "EventResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/DraftStateResponse"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "replayed": {
+            "title": "Replayed",
+            "type": "boolean"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "outcome",
+          "revision",
+          "replayed",
+          "draft"
+        ],
+        "title": "EventResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "api_version": {
+            "const": "v1",
+            "title": "Api Version",
+            "type": "string"
+          },
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "api_version"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "LeagueConfigInput": {
+        "additionalProperties": false,
+        "properties": {
+          "config_version": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Config Version",
+            "type": "string"
+          },
+          "draft_type": {
+            "const": "snake",
+            "title": "Draft Type",
+            "type": "string"
+          },
+          "roster_slots": {
+            "items": {
+              "$ref": "#/components/schemas/RosterSlotInput"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Roster Slots",
+            "type": "array"
+          },
+          "scoring_rules": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "maxProperties": 64,
+            "title": "Scoring Rules",
+            "type": "object"
+          },
+          "superflex": {
+            "default": false,
+            "title": "Superflex",
+            "type": "boolean"
+          },
+          "te_premium": {
+            "default": 0,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Te Premium",
+            "type": "number"
+          },
+          "team_count": {
+            "maximum": 32.0,
+            "minimum": 2.0,
+            "title": "Team Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "config_version",
+          "team_count",
+          "draft_type",
+          "roster_slots"
+        ],
+        "title": "LeagueConfigInput",
+        "type": "object"
+      },
+      "LeagueCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/LeagueConfigInput"
+          },
+          "provider": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_league_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Provider League Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "provider_league_id",
+          "config"
+        ],
+        "title": "LeagueCreateRequest",
+        "type": "object"
+      },
+      "LeagueResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "config_version": {
+            "title": "Config Version",
+            "type": "string"
+          },
+          "league_id": {
+            "title": "League Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "league_id",
+          "config_version"
+        ],
+        "title": "LeagueResponse",
+        "type": "object"
+      },
+      "ObservedPickInput": {
+        "additionalProperties": false,
+        "properties": {
+          "overall_pick": {
+            "maximum": 1024.0,
+            "minimum": 1.0,
+            "title": "Overall Pick",
+            "type": "integer"
+          },
+          "player": {
+            "$ref": "#/components/schemas/PlayerReferenceInput"
+          },
+          "team_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Team Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "overall_pick",
+          "team_id",
+          "player"
+        ],
+        "title": "ObservedPickInput",
+        "type": "object"
+      },
+      "PlayerReferenceInput": {
+        "additionalProperties": false,
+        "properties": {
+          "external_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "External Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "nfl_team": {
+            "anyOf": [
+              {
+                "maxLength": 4,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nfl Team"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "enum": [
+                  "QB",
+                  "RB",
+                  "WR",
+                  "TE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "provider": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "external_id"
+        ],
+        "title": "PlayerReferenceInput",
+        "type": "object"
+      },
+      "RecommendationCandidateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "components": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Components",
+            "type": "object"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "draft_score": {
+            "title": "Draft Score",
+            "type": "number"
+          },
+          "internal_player_id": {
+            "title": "Internal Player Id",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "reason_text": {
+            "title": "Reason Text",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "internal_player_id",
+          "rank",
+          "draft_score",
+          "confidence",
+          "components",
+          "reason_codes",
+          "reason_text",
+          "warnings"
+        ],
+        "title": "RecommendationCandidateResponse",
+        "type": "object"
+      },
+      "RecommendationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendationCandidateResponse"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "dataset_version": {
+            "title": "Dataset Version",
+            "type": "string"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "feature_version": {
+            "title": "Feature Version",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "source_updated_at": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Source Updated At",
+            "type": "object"
+          },
+          "status": {
+            "const": "current",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "draft_id",
+          "revision",
+          "generated_at",
+          "dataset_version",
+          "feature_version",
+          "model_version",
+          "source_updated_at",
+          "candidates"
+        ],
+        "title": "RecommendationResponse",
+        "type": "object"
+      },
+      "RosterSlotInput": {
+        "additionalProperties": false,
+        "properties": {
+          "eligible_positions": {
+            "items": {
+              "enum": [
+                "QB",
+                "RB",
+                "WR",
+                "TE"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Eligible Positions",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "is_bench": {
+            "default": false,
+            "title": "Is Bench",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "eligible_positions"
+        ],
+        "title": "RosterSlotInput",
+        "type": "object"
+      },
+      "SnapshotRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "declared_complete": {
+            "title": "Declared Complete",
+            "type": "boolean"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "picks": {
+            "items": {
+              "$ref": "#/components/schemas/ObservedPickInput"
+            },
+            "maxItems": 256,
+            "title": "Picks",
+            "type": "array"
+          },
+          "source": {
+            "enum": [
+              "espn",
+              "fantasypros"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "observed_at",
+          "declared_complete",
+          "picks"
+        ],
+        "title": "SnapshotRequest",
+        "type": "object"
+      },
+      "SnapshotResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "differences": {
+            "additionalProperties": true,
+            "title": "Differences",
+            "type": "object"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/DraftStateResponse"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "outcome",
+          "revision",
+          "differences",
+          "draft"
+        ],
+        "title": "SnapshotResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "NFL Fantasy Assistant",
+    "version": "v1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/diagnostics": {
+      "get": {
+        "operationId": "diagnostics_v1_diagnostics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Diagnostics"
+      }
+    },
+    "/v1/drafts": {
+      "post": {
+        "operationId": "create_draft_v1_drafts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Draft"
+      }
+    },
+    "/v1/drafts/{draft_id}": {
+      "get": {
+        "operationId": "get_draft_v1_drafts__draft_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Draft"
+      }
+    },
+    "/v1/drafts/{draft_id}/events": {
+      "post": {
+        "operationId": "ingest_event_v1_drafts__draft_id__events_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ingest Event"
+      }
+    },
+    "/v1/drafts/{draft_id}/recommendations": {
+      "get": {
+        "operationId": "recommendations_v1_drafts__draft_id__recommendations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Recommendations"
+      }
+    },
+    "/v1/drafts/{draft_id}/snapshot": {
+      "post": {
+        "operationId": "reconcile_snapshot_v1_drafts__draft_id__snapshot_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reconcile Snapshot"
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "operationId": "health_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/v1/leagues": {
+      "post": {
+        "operationId": "create_league_v1_leagues_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeagueCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeagueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create League"
+      }
+    }
+  }
+}

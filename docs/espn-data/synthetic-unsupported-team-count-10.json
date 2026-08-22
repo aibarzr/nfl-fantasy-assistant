@@ -1,0 +1,25 @@
+{
+  "fixture_metadata": {
+    "source_class": "synthetic_validation_input",
+    "derived_from": "The observed ESPN configuration field shape settings.size; all values are synthetic.",
+    "surface": "espn_draft",
+    "league_provider": "espn",
+    "capture_date": "2026-07-30",
+    "completeness": "configuration-only; not a platform capture",
+    "expected_parser_outcome": {
+      "status": "unsupported",
+      "reason_code": "unsupported_team_count",
+      "message": "This MVP supports only 8-team snake drafts."
+    }
+  },
+  "observed_field_shape": {
+    "settings": {
+      "size": 10
+    }
+  },
+  "normalized_observation": {
+    "surface": "espn_draft",
+    "league_provider": "espn",
+    "team_count": 10
+  }
+}

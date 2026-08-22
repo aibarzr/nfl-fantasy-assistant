@@ -1,0 +1,29 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - name: Install backend dependencies
+        run: uv --directory backend sync --all-groups --frozen
+      - name: Install extension dependencies
+        run: npm --prefix extension ci
+      - name: Run repository quality workflow
+        run: ./scripts/quality.sh all
+      - name: Verify no tracked-file drift
+        run: git diff --exit-code && git diff --cached --exit-code

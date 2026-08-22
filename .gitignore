@@ -1,0 +1,26 @@
+# Python toolchain and test output
+backend/.venv/
+backend/.mypy_cache/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/build/
+backend/dist/
+**/__pycache__/
+*.py[cod]
+
+# Node toolchain and extension build output
+extension/node_modules/
+extension/dist/
+extension/coverage/
+
+# Local runtime state and secrets
+data/*
+!data/.gitkeep
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+*.token
+*.log

@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "resolveJsonModule": true,
+    "strict": true,
+    "target": "ES2023",
+    "types": ["chrome", "vitest/globals"]
+  },
+  "include": ["src", "tests"]
+}

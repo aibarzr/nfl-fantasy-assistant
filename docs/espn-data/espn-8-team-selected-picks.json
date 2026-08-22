@@ -1,0 +1,1301 @@
+{
+  "fixture_metadata": {
+    "source_class": "sanitized_derived_capture",
+    "surface": "espn_draft",
+    "league_provider": "espn",
+    "captured_on": "2026-07-30",
+    "sanitization": {
+      "removed": [
+        "all request URLs and headers",
+        "session credentials",
+        "direct account-scope identifiers",
+        "display names, logos, and unrelated payload fields"
+      ],
+      "team_references": "Stable fixture-local aliases in scheduled-draft-order order."
+    },
+    "completeness": "observed SELECTED WebSocket messages only; not an authoritative recovery snapshot",
+    "expected_parser_outcome": "normalized pick observations with unique fixture-local observation IDs; source_trailing_numeric_code semantics and idempotency must be investigated before an event rule is accepted"
+  },
+  "events": [
+    {
+      "observation_id": "wss-selected-001",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4429795"
+      },
+      "source_trailing_numeric_code": 2
+    },
+    {
+      "observation_id": "wss-selected-002",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4430807"
+      },
+      "source_trailing_numeric_code": 2
+    },
+    {
+      "observation_id": "wss-selected-003",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4426515"
+      },
+      "source_trailing_numeric_code": 4
+    },
+    {
+      "observation_id": "wss-selected-004",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4362628"
+      },
+      "source_trailing_numeric_code": 4
+    },
+    {
+      "observation_id": "wss-selected-005",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "3117251"
+      },
+      "source_trailing_numeric_code": 2
+    },
+    {
+      "observation_id": "wss-selected-006",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4430878"
+      },
+      "source_trailing_numeric_code": 4
+    },
+    {
+      "observation_id": "wss-selected-007",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "4242335"
+      },
+      "source_trailing_numeric_code": 2
+    },
+    {
+      "observation_id": "wss-selected-008",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "3043078"
+      },
+      "source_trailing_numeric_code": 2
+    },
+    {
+      "observation_id": "wss-selected-009",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4374302"
+      },
+      "source_trailing_numeric_code": 4
+    },
+    {
+      "observation_id": "wss-selected-010",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "4379399"
+      },
+      "source_trailing_numeric_code": 3
+    },
+    {
+      "observation_id": "wss-selected-011",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4241389"
+      },
+      "source_trailing_numeric_code": 5
+    },
+    {
+      "observation_id": "wss-selected-012",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4262921"
+      },
+      "source_trailing_numeric_code": 4
+    },
+    {
+      "observation_id": "wss-selected-013",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4685382"
+      },
+      "source_trailing_numeric_code": 2
+    },
+    {
+      "observation_id": "wss-selected-014",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "3929630"
+      },
+      "source_trailing_numeric_code": 2
+    },
+    {
+      "observation_id": "wss-selected-015",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4870808"
+      },
+      "source_trailing_numeric_code": 3
+    },
+    {
+      "observation_id": "wss-selected-016",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4426502"
+      },
+      "source_trailing_numeric_code": 4
+    },
+    {
+      "observation_id": "wss-selected-017",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4361307"
+      },
+      "source_trailing_numeric_code": 6
+    },
+    {
+      "observation_id": "wss-selected-018",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4428331"
+      },
+      "source_trailing_numeric_code": 4
+    },
+    {
+      "observation_id": "wss-selected-019",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4429160"
+      },
+      "source_trailing_numeric_code": 3
+    },
+    {
+      "observation_id": "wss-selected-020",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4890973"
+      },
+      "source_trailing_numeric_code": 3
+    },
+    {
+      "observation_id": "wss-selected-021",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4047365"
+      },
+      "source_trailing_numeric_code": 3
+    },
+    {
+      "observation_id": "wss-selected-022",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4567048"
+      },
+      "source_trailing_numeric_code": 2
+    },
+    {
+      "observation_id": "wss-selected-023",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "4258173"
+      },
+      "source_trailing_numeric_code": 4
+    },
+    {
+      "observation_id": "wss-selected-024",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4432665"
+      },
+      "source_trailing_numeric_code": 6
+    },
+    {
+      "observation_id": "wss-selected-025",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4362238"
+      },
+      "source_trailing_numeric_code": 3
+    },
+    {
+      "observation_id": "wss-selected-026",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "3918298"
+      },
+      "source_trailing_numeric_code": 1
+    },
+    {
+      "observation_id": "wss-selected-027",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4427366"
+      },
+      "source_trailing_numeric_code": 3
+    },
+    {
+      "observation_id": "wss-selected-028",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4047646"
+      },
+      "source_trailing_numeric_code": 5
+    },
+    {
+      "observation_id": "wss-selected-029",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4426354"
+      },
+      "source_trailing_numeric_code": 5
+    },
+    {
+      "observation_id": "wss-selected-030",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4361370"
+      },
+      "source_trailing_numeric_code": 5
+    },
+    {
+      "observation_id": "wss-selected-031",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4429615"
+      },
+      "source_trailing_numeric_code": 5
+    },
+    {
+      "observation_id": "wss-selected-032",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4569618"
+      },
+      "source_trailing_numeric_code": 5
+    },
+    {
+      "observation_id": "wss-selected-033",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4430737"
+      },
+      "source_trailing_numeric_code": 3
+    },
+    {
+      "observation_id": "wss-selected-034",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4685472"
+      },
+      "source_trailing_numeric_code": 7
+    },
+    {
+      "observation_id": "wss-selected-035",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "3916387"
+      },
+      "source_trailing_numeric_code": 1
+    },
+    {
+      "observation_id": "wss-selected-036",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4361579"
+      },
+      "source_trailing_numeric_code": 7
+    },
+    {
+      "observation_id": "wss-selected-037",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4239996"
+      },
+      "source_trailing_numeric_code": 7
+    },
+    {
+      "observation_id": "wss-selected-038",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4567750"
+      },
+      "source_trailing_numeric_code": 7
+    },
+    {
+      "observation_id": "wss-selected-039",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "16800"
+      },
+      "source_trailing_numeric_code": 5
+    },
+    {
+      "observation_id": "wss-selected-040",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4239993"
+      },
+      "source_trailing_numeric_code": 5
+    },
+    {
+      "observation_id": "wss-selected-041",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4431452"
+      },
+      "source_trailing_numeric_code": 1
+    },
+    {
+      "observation_id": "wss-selected-042",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "4696981"
+      },
+      "source_trailing_numeric_code": 7
+    },
+    {
+      "observation_id": "wss-selected-043",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4723086"
+      },
+      "source_trailing_numeric_code": 6
+    },
+    {
+      "observation_id": "wss-selected-044",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4685702"
+      },
+      "source_trailing_numeric_code": 10
+    },
+    {
+      "observation_id": "wss-selected-045",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4431459"
+      },
+      "source_trailing_numeric_code": 6
+    },
+    {
+      "observation_id": "wss-selected-046",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4595348"
+      },
+      "source_trailing_numeric_code": 7
+    },
+    {
+      "observation_id": "wss-selected-047",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4426348"
+      },
+      "source_trailing_numeric_code": 1
+    },
+    {
+      "observation_id": "wss-selected-048",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4596448"
+      },
+      "source_trailing_numeric_code": 7
+    },
+    {
+      "observation_id": "wss-selected-049",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4040715"
+      },
+      "source_trailing_numeric_code": 1
+    },
+    {
+      "observation_id": "wss-selected-050",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4426388"
+      },
+      "source_trailing_numeric_code": 10
+    },
+    {
+      "observation_id": "wss-selected-051",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4612826"
+      },
+      "source_trailing_numeric_code": 10
+    },
+    {
+      "observation_id": "wss-selected-052",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4431299"
+      },
+      "source_trailing_numeric_code": 10
+    },
+    {
+      "observation_id": "wss-selected-053",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4241478"
+      },
+      "source_trailing_numeric_code": 11
+    },
+    {
+      "observation_id": "wss-selected-054",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4372016"
+      },
+      "source_trailing_numeric_code": 10
+    },
+    {
+      "observation_id": "wss-selected-055",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "3915416"
+      },
+      "source_trailing_numeric_code": 10
+    },
+    {
+      "observation_id": "wss-selected-056",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "3121422"
+      },
+      "source_trailing_numeric_code": 7
+    },
+    {
+      "observation_id": "wss-selected-057",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4882093"
+      },
+      "source_trailing_numeric_code": 10
+    },
+    {
+      "observation_id": "wss-selected-058",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "4259545"
+      },
+      "source_trailing_numeric_code": 11
+    },
+    {
+      "observation_id": "wss-selected-059",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4871023"
+      },
+      "source_trailing_numeric_code": 11
+    },
+    {
+      "observation_id": "wss-selected-060",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4035538"
+      },
+      "source_trailing_numeric_code": 12
+    },
+    {
+      "observation_id": "wss-selected-061",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4685512"
+      },
+      "source_trailing_numeric_code": 11
+    },
+    {
+      "observation_id": "wss-selected-062",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4432710"
+      },
+      "source_trailing_numeric_code": 11
+    },
+    {
+      "observation_id": "wss-selected-063",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4360248"
+      },
+      "source_trailing_numeric_code": 6
+    },
+    {
+      "observation_id": "wss-selected-064",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4685278"
+      },
+      "source_trailing_numeric_code": 10
+    },
+    {
+      "observation_id": "wss-selected-065",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "3128429"
+      },
+      "source_trailing_numeric_code": 11
+    },
+    {
+      "observation_id": "wss-selected-066",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "3916148"
+      },
+      "source_trailing_numeric_code": 11
+    },
+    {
+      "observation_id": "wss-selected-067",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4430027"
+      },
+      "source_trailing_numeric_code": 6
+    },
+    {
+      "observation_id": "wss-selected-068",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4248528"
+      },
+      "source_trailing_numeric_code": 12
+    },
+    {
+      "observation_id": "wss-selected-069",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4047650"
+      },
+      "source_trailing_numeric_code": 13
+    },
+    {
+      "observation_id": "wss-selected-070",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "3915511"
+      },
+      "source_trailing_numeric_code": 1
+    },
+    {
+      "observation_id": "wss-selected-071",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "16737"
+      },
+      "source_trailing_numeric_code": 12
+    },
+    {
+      "observation_id": "wss-selected-072",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4432708"
+      },
+      "source_trailing_numeric_code": 11
+    },
+    {
+      "observation_id": "wss-selected-073",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4880281"
+      },
+      "source_trailing_numeric_code": 12
+    },
+    {
+      "observation_id": "wss-selected-074",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "3040151"
+      },
+      "source_trailing_numeric_code": 6
+    },
+    {
+      "observation_id": "wss-selected-075",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4360078"
+      },
+      "source_trailing_numeric_code": 12
+    },
+    {
+      "observation_id": "wss-selected-076",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "5083076"
+      },
+      "source_trailing_numeric_code": 6
+    },
+    {
+      "observation_id": "wss-selected-077",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4431611"
+      },
+      "source_trailing_numeric_code": 1
+    },
+    {
+      "observation_id": "wss-selected-078",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4035687"
+      },
+      "source_trailing_numeric_code": 12
+    },
+    {
+      "observation_id": "wss-selected-079",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4432773"
+      },
+      "source_trailing_numeric_code": 12
+    },
+    {
+      "observation_id": "wss-selected-080",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4432620"
+      },
+      "source_trailing_numeric_code": 12
+    },
+    {
+      "observation_id": "wss-selected-081",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4689114"
+      },
+      "source_trailing_numeric_code": 13
+    },
+    {
+      "observation_id": "wss-selected-082",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4360310"
+      },
+      "source_trailing_numeric_code": 13
+    },
+    {
+      "observation_id": "wss-selected-083",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "12483"
+      },
+      "source_trailing_numeric_code": 13
+    },
+    {
+      "observation_id": "wss-selected-084",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "2577417"
+      },
+      "source_trailing_numeric_code": 13
+    },
+    {
+      "observation_id": "wss-selected-085",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4361741"
+      },
+      "source_trailing_numeric_code": 1
+    },
+    {
+      "observation_id": "wss-selected-086",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4870795"
+      },
+      "source_trailing_numeric_code": 13
+    },
+    {
+      "observation_id": "wss-selected-087",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "4569173"
+      },
+      "source_trailing_numeric_code": 13
+    },
+    {
+      "observation_id": "wss-selected-088",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4701936"
+      },
+      "source_trailing_numeric_code": 13
+    },
+    {
+      "observation_id": "wss-selected-089",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "4426338"
+      },
+      "source_trailing_numeric_code": 14
+    },
+    {
+      "observation_id": "wss-selected-090",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "4429205"
+      },
+      "source_trailing_numeric_code": 14
+    },
+    {
+      "observation_id": "wss-selected-091",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4685415"
+      },
+      "source_trailing_numeric_code": 14
+    },
+    {
+      "observation_id": "wss-selected-092",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4038815"
+      },
+      "source_trailing_numeric_code": 14
+    },
+    {
+      "observation_id": "wss-selected-093",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4038941"
+      },
+      "source_trailing_numeric_code": 14
+    },
+    {
+      "observation_id": "wss-selected-094",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4569987"
+      },
+      "source_trailing_numeric_code": 14
+    },
+    {
+      "observation_id": "wss-selected-095",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "3916433"
+      },
+      "source_trailing_numeric_code": 14
+    },
+    {
+      "observation_id": "wss-selected-096",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4360761"
+      },
+      "source_trailing_numeric_code": 14
+    },
+    {
+      "observation_id": "wss-selected-097",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4428209"
+      },
+      "source_trailing_numeric_code": 15
+    },
+    {
+      "observation_id": "wss-selected-098",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4569587"
+      },
+      "source_trailing_numeric_code": 15
+    },
+    {
+      "observation_id": "wss-selected-099",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "3139477"
+      },
+      "source_trailing_numeric_code": 15
+    },
+    {
+      "observation_id": "wss-selected-100",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4608686"
+      },
+      "source_trailing_numeric_code": 15
+    },
+    {
+      "observation_id": "wss-selected-101",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4241985"
+      },
+      "source_trailing_numeric_code": 15
+    },
+    {
+      "observation_id": "wss-selected-102",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4241416"
+      },
+      "source_trailing_numeric_code": 15
+    },
+    {
+      "observation_id": "wss-selected-103",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "3046779"
+      },
+      "source_trailing_numeric_code": 15
+    },
+    {
+      "observation_id": "wss-selected-104",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "3042519"
+      },
+      "source_trailing_numeric_code": 15
+    },
+    {
+      "observation_id": "wss-selected-105",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "3121023"
+      },
+      "source_trailing_numeric_code": 16
+    },
+    {
+      "observation_id": "wss-selected-106",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "-16034"
+      },
+      "source_trailing_numeric_code": 8
+    },
+    {
+      "observation_id": "wss-selected-107",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "4371733"
+      },
+      "source_trailing_numeric_code": 16
+    },
+    {
+      "observation_id": "wss-selected-108",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4697815"
+      },
+      "source_trailing_numeric_code": 16
+    },
+    {
+      "observation_id": "wss-selected-109",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4688813"
+      },
+      "source_trailing_numeric_code": 16
+    },
+    {
+      "observation_id": "wss-selected-110",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "3953687"
+      },
+      "source_trailing_numeric_code": 9
+    },
+    {
+      "observation_id": "wss-selected-111",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "15847"
+      },
+      "source_trailing_numeric_code": 16
+    },
+    {
+      "observation_id": "wss-selected-112",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "4385690"
+      },
+      "source_trailing_numeric_code": 16
+    },
+    {
+      "observation_id": "wss-selected-113",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "-16007"
+      },
+      "source_trailing_numeric_code": 8
+    },
+    {
+      "observation_id": "wss-selected-114",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "-16023"
+      },
+      "source_trailing_numeric_code": 8
+    },
+    {
+      "observation_id": "wss-selected-115",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "-16014"
+      },
+      "source_trailing_numeric_code": 8
+    },
+    {
+      "observation_id": "wss-selected-116",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "-16026"
+      },
+      "source_trailing_numeric_code": 8
+    },
+    {
+      "observation_id": "wss-selected-117",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "-16033"
+      },
+      "source_trailing_numeric_code": 8
+    },
+    {
+      "observation_id": "wss-selected-118",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "-16008"
+      },
+      "source_trailing_numeric_code": 8
+    },
+    {
+      "observation_id": "wss-selected-119",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "4362081"
+      },
+      "source_trailing_numeric_code": 9
+    },
+    {
+      "observation_id": "wss-selected-120",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "-16021"
+      },
+      "source_trailing_numeric_code": 8
+    },
+    {
+      "observation_id": "wss-selected-121",
+      "transport_direction": "receive",
+      "team_ref": "team-8",
+      "player": {
+        "provider": "espn",
+        "external_id": "2971573"
+      },
+      "source_trailing_numeric_code": 9
+    },
+    {
+      "observation_id": "wss-selected-122",
+      "transport_direction": "receive",
+      "team_ref": "team-7",
+      "player": {
+        "provider": "espn",
+        "external_id": "3116365"
+      },
+      "source_trailing_numeric_code": 16
+    },
+    {
+      "observation_id": "wss-selected-123",
+      "transport_direction": "receive",
+      "team_ref": "team-6",
+      "player": {
+        "provider": "espn",
+        "external_id": "2473037"
+      },
+      "source_trailing_numeric_code": 9
+    },
+    {
+      "observation_id": "wss-selected-124",
+      "transport_direction": "receive",
+      "team_ref": "team-5",
+      "player": {
+        "provider": "espn",
+        "external_id": "4574716"
+      },
+      "source_trailing_numeric_code": 9
+    },
+    {
+      "observation_id": "wss-selected-125",
+      "transport_direction": "receive",
+      "team_ref": "team-4",
+      "player": {
+        "provider": "espn",
+        "external_id": "4686361"
+      },
+      "source_trailing_numeric_code": 9
+    },
+    {
+      "observation_id": "wss-selected-126",
+      "transport_direction": "receive",
+      "team_ref": "team-3",
+      "player": {
+        "provider": "espn",
+        "external_id": "4572680"
+      },
+      "source_trailing_numeric_code": 16
+    },
+    {
+      "observation_id": "wss-selected-127",
+      "transport_direction": "receive",
+      "team_ref": "team-2",
+      "player": {
+        "provider": "espn",
+        "external_id": "4034949"
+      },
+      "source_trailing_numeric_code": 9
+    },
+    {
+      "observation_id": "wss-selected-128",
+      "transport_direction": "receive",
+      "team_ref": "team-1",
+      "player": {
+        "provider": "espn",
+        "external_id": "3055899"
+      },
+      "source_trailing_numeric_code": 9
+    }
+  ]
+}

@@ -1,0 +1,918 @@
+{
+  "fixture_metadata": {
+    "source_class": "sanitized_derived_capture",
+    "surface": "espn_draft",
+    "league_provider": "espn",
+    "captured_on": "2026-07-30",
+    "sanitization": {
+      "removed": [
+        "all request URLs and headers",
+        "session credentials",
+        "direct account-scope identifiers",
+        "display names, logos, and unrelated payload fields"
+      ],
+      "team_references": "Stable fixture-local aliases in scheduled-draft-order order."
+    },
+    "completeness": "configuration and scheduled snake order; this response does not establish accepted picks",
+    "expected_parser_outcome": "supported initial snapshot for an 8-team snake draft"
+  },
+  "snapshot": {
+    "team_count": 8,
+    "draft": {
+      "type_code": "SNAKE",
+      "order_type_code": "MANUAL",
+      "scheduled_pick_order": [
+        {
+          "overall_pick": 1,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 2,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 3,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 4,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 5,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 6,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 7,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 8,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 9,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 10,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 11,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 12,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 13,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 14,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 15,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 16,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 17,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 18,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 19,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 20,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 21,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 22,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 23,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 24,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 25,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 26,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 27,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 28,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 29,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 30,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 31,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 32,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 33,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 34,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 35,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 36,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 37,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 38,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 39,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 40,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 41,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 42,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 43,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 44,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 45,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 46,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 47,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 48,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 49,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 50,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 51,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 52,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 53,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 54,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 55,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 56,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 57,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 58,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 59,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 60,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 61,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 62,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 63,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 64,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 65,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 66,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 67,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 68,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 69,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 70,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 71,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 72,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 73,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 74,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 75,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 76,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 77,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 78,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 79,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 80,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 81,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 82,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 83,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 84,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 85,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 86,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 87,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 88,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 89,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 90,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 91,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 92,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 93,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 94,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 95,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 96,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 97,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 98,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 99,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 100,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 101,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 102,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 103,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 104,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 105,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 106,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 107,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 108,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 109,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 110,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 111,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 112,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 113,
+          "team_ref": "team-1"
+        },
+        {
+          "overall_pick": 114,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 115,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 116,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 117,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 118,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 119,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 120,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 121,
+          "team_ref": "team-8"
+        },
+        {
+          "overall_pick": 122,
+          "team_ref": "team-7"
+        },
+        {
+          "overall_pick": 123,
+          "team_ref": "team-6"
+        },
+        {
+          "overall_pick": 124,
+          "team_ref": "team-5"
+        },
+        {
+          "overall_pick": 125,
+          "team_ref": "team-4"
+        },
+        {
+          "overall_pick": 126,
+          "team_ref": "team-3"
+        },
+        {
+          "overall_pick": 127,
+          "team_ref": "team-2"
+        },
+        {
+          "overall_pick": 128,
+          "team_ref": "team-1"
+        }
+      ]
+    },
+    "roster": {
+      "lineup_slot_counts": {
+        "0": 1,
+        "1": 0,
+        "2": 2,
+        "3": 0,
+        "4": 2,
+        "5": 0,
+        "6": 1,
+        "7": 0,
+        "8": 0,
+        "9": 0,
+        "10": 0,
+        "11": 0,
+        "12": 0,
+        "13": 0,
+        "14": 0,
+        "15": 0,
+        "16": 1,
+        "17": 1,
+        "18": 0,
+        "19": 0,
+        "20": 7,
+        "21": 1,
+        "22": 0,
+        "23": 1,
+        "24": 0
+      },
+      "position_limits": {
+        "0": 0,
+        "1": 4,
+        "2": 8,
+        "3": 8,
+        "4": 3,
+        "5": 3,
+        "6": -1,
+        "7": -1,
+        "8": -1,
+        "9": -1,
+        "10": -1,
+        "11": -1,
+        "12": -1,
+        "13": -1,
+        "14": -1,
+        "15": -1,
+        "16": 3,
+        "17": -1
+      }
+    },
+    "scoring": {
+      "type_code": "H2H_POINTS",
+      "items": [
+        {
+          "stat_id": 20,
+          "points": -2,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 72,
+          "points": -2,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 85,
+          "points": -1,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 89,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 5
+          }
+        },
+        {
+          "stat_id": 90,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 4
+          }
+        },
+        {
+          "stat_id": 91,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 3
+          }
+        },
+        {
+          "stat_id": 92,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 1
+          }
+        },
+        {
+          "stat_id": 95,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 2
+          }
+        },
+        {
+          "stat_id": 96,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 2
+          }
+        },
+        {
+          "stat_id": 97,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 2
+          }
+        },
+        {
+          "stat_id": 98,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 2
+          }
+        },
+        {
+          "stat_id": 99,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 1
+          }
+        },
+        {
+          "stat_id": 123,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": -1
+          }
+        },
+        {
+          "stat_id": 124,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": -3
+          }
+        },
+        {
+          "stat_id": 125,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": -5
+          }
+        },
+        {
+          "stat_id": 128,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 5
+          }
+        },
+        {
+          "stat_id": 129,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 3
+          }
+        },
+        {
+          "stat_id": 130,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 2
+          }
+        },
+        {
+          "stat_id": 132,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": -1
+          }
+        },
+        {
+          "stat_id": 133,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": -3
+          }
+        },
+        {
+          "stat_id": 134,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": -5
+          }
+        },
+        {
+          "stat_id": 135,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": -6
+          }
+        },
+        {
+          "stat_id": 136,
+          "points": 0,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": -7
+          }
+        },
+        {
+          "stat_id": 3,
+          "points": 0.04,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 24,
+          "points": 0.1,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 42,
+          "points": 0.1,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 86,
+          "points": 1,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 209,
+          "points": 1,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 1
+          }
+        },
+        {
+          "stat_id": 19,
+          "points": 2,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 26,
+          "points": 2,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 44,
+          "points": 2,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 206,
+          "points": 2,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 2
+          }
+        },
+        {
+          "stat_id": 80,
+          "points": 3,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 4,
+          "points": 4,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 77,
+          "points": 4,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 198,
+          "points": 5,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 25,
+          "points": 6,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 43,
+          "points": 6,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 63,
+          "points": 6,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        },
+        {
+          "stat_id": 93,
+          "points": 6,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 6
+          }
+        },
+        {
+          "stat_id": 101,
+          "points": 6,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 6
+          }
+        },
+        {
+          "stat_id": 102,
+          "points": 6,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 6
+          }
+        },
+        {
+          "stat_id": 103,
+          "points": 6,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 6
+          }
+        },
+        {
+          "stat_id": 104,
+          "points": 6,
+          "is_reverse_item": false,
+          "points_overrides": {
+            "16": 6
+          }
+        },
+        {
+          "stat_id": 201,
+          "points": 6,
+          "is_reverse_item": false,
+          "points_overrides": {}
+        }
+      ]
+    }
+  }
+}
