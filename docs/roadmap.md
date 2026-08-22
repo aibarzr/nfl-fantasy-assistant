@@ -7,10 +7,11 @@ service-worker-only localhost client and a read-only, explainable recommendation
 ESPN surface activation and local security controls are complete, but league initialization remains
 blocked because the canonical sanitized findings do not establish an active-user team/slot source,
 semantic roster/scoring codebook, or authoritative recovery snapshot/replay. Sleeper is an
-approved second provider: its extension-bound, read-only API design is recorded in ADR-0002 and
-its discovery spike must complete before runtime implementation. K and DEF are supported MVP
-assets with completed neutral domain/data/model support; Sleeper still needs adapter-specific
-identity and recovery evidence before a league with those positions can initialize. The Phase 4
+approved second provider: its extension-bound, read-only API discovery is complete and records a
+validated initialization/recovery source plus strict versioned identity-mapping gates. K and DEF
+are supported MVP assets with completed neutral domain/data/model support; the Sleeper adapter
+still needs its own identity-mapping implementation before a league with those positions can
+initialize. The Phase 4
 recommendation engine is complete.
 
 ## Delivery phases

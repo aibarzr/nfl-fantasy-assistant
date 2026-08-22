@@ -1,0 +1,52 @@
+{
+  "fixture_metadata": {
+    "source_class": "synthetic_validation_input",
+    "surface": "sleeper_nfl_draft",
+    "league_provider": "sleeper",
+    "captured_on": "2026-08-22",
+    "sanitization": {
+      "removed": [
+        "request URLs and headers",
+        "browser authentication material",
+        "real user, league, draft, roster, player, and team identifiers",
+        "display names and unrelated provider metadata"
+      ],
+      "aliases": "All identifiers and team labels are stable fixture-local aliases."
+    },
+    "completeness": "Complete current picks response at an in-progress draft revision; it is not a completed-draft fixture.",
+    "expected_parser_outcome": "A validated 8-team snake draft with a contiguous ordered snapshot and only neutral provider references."
+  },
+  "draft": {
+    "draft_id": "draft-fixture",
+    "league_id": "league-fixture",
+    "type": "snake",
+    "status": "drafting",
+    "sport": "nfl",
+    "season": "2026",
+    "settings": {
+      "teams": 8,
+      "rounds": 13
+    },
+    "draft_order": {
+      "user-fixture": 7
+    },
+    "slot_to_roster_id": {
+      "1": "roster-fixture-1",
+      "2": "roster-fixture-2",
+      "3": "roster-fixture-3",
+      "4": "roster-fixture-4",
+      "5": "roster-fixture-5",
+      "6": "roster-fixture-6",
+      "7": "roster-fixture-7",
+      "8": "roster-fixture-8"
+    }
+  },
+  "picks": [
+    { "draft_id": "draft-fixture", "pick_no": 1, "round": 1, "draft_slot": 1, "roster_id": "roster-fixture-1", "picked_by": null, "player_id": "player-fixture-01", "is_keeper": null, "metadata": { "player_id": "player-fixture-01", "position": "RB", "team": "team-fixture-01", "sport": "nfl" } },
+    { "draft_id": "draft-fixture", "pick_no": 2, "round": 1, "draft_slot": 2, "roster_id": "roster-fixture-2", "picked_by": null, "player_id": "player-fixture-02", "is_keeper": null, "metadata": { "player_id": "player-fixture-02", "position": "RB", "team": "team-fixture-02", "sport": "nfl" } },
+    { "draft_id": "draft-fixture", "pick_no": 3, "round": 1, "draft_slot": 3, "roster_id": "roster-fixture-3", "picked_by": null, "player_id": "player-fixture-03", "is_keeper": null, "metadata": { "player_id": "player-fixture-03", "position": "WR", "team": "team-fixture-03", "sport": "nfl" } },
+    { "draft_id": "draft-fixture", "pick_no": 4, "round": 1, "draft_slot": 4, "roster_id": "roster-fixture-4", "picked_by": null, "player_id": "player-fixture-04", "is_keeper": null, "metadata": { "player_id": "player-fixture-04", "position": "WR", "team": "team-fixture-04", "sport": "nfl" } },
+    { "draft_id": "draft-fixture", "pick_no": 5, "round": 1, "draft_slot": 5, "roster_id": "roster-fixture-5", "picked_by": null, "player_id": "player-fixture-05", "is_keeper": null, "metadata": { "player_id": "player-fixture-05", "position": "WR", "team": "team-fixture-05", "sport": "nfl" } },
+    { "draft_id": "draft-fixture", "pick_no": 6, "round": 1, "draft_slot": 6, "roster_id": "roster-fixture-6", "picked_by": null, "player_id": "player-fixture-06", "is_keeper": null, "metadata": { "player_id": "player-fixture-06", "position": "RB", "team": "team-fixture-06", "sport": "nfl" } }
+  ]
+}

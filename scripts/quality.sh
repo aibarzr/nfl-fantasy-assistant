@@ -34,6 +34,7 @@ extension_checks() {
 documentation_checks() {
   run_check "documentation links" node scripts/check-doc-links.mjs
   run_check "ESPN fixture sanitization" node scripts/check_espn_spike_fixtures.mjs
+  run_check "Sleeper fixture sanitization" node scripts/check_sleeper_spike_fixtures.mjs
 }
 
 drift_check() {

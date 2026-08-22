@@ -1,7 +1,7 @@
 # NFL-0037 — Validate Sleeper draft observability and API boundaries
 
-- Status: In Progress
-- Resolution: Unresolved
+- Status: Done
+- Resolution: Done
 - Phase: 5 — Live platform loops
 - Owner: Codex
 - Created: 2026-08-22
@@ -15,6 +15,7 @@
 - [ADR-0002](../../architecture/decisions/0002-extension-bound-provider-api-access.md)
 - [Data and Player Identity](../../data/data-and-identity.md#sources-and-compliance)
 - [Local Security Threat Model](../../security/threat-model.md#required-controls)
+- [Sleeper observability finding](../../sleeper-data/observability-finding-2026-08-22.md)
 
 ## Outcome
 
@@ -103,34 +104,66 @@ and kicking rules. The user approved K/DEF as supported MVP assets. The current 
 the neutral K/DEF domain/data/model/contract support. This otherwise valid configuration still
 needs Sleeper-specific identity and recovery evidence before it can initialize.
 
+After this league was started, the visible draft board transitioned to `drafting`, showed five
+ordered selections, and paused at an unclaimed CPU slot. A controlled page reload restored the
+same 8-team/13-round board, the visible selections, and the active clock. This is useful UI
+continuity evidence, but it does not prove that the documented picks endpoint is a complete,
+authoritative recovery snapshot; that endpoint must be inspected directly and compared with the
+board before an adapter can rely on it.
+
+The documented `GET /v1/players/nfl` catalog describes player IDs used by draft picks and includes
+both individual-player records and 32 `DEF` records keyed by NFL-team code. A live, non-retained
+shape check showed that individual-player GSIS and ESPN crosswalk fields are incomplete, including
+for kicker records. Therefore the catalog is not an automatic authoritative mapping route to the
+internal nflverse identity set. A Sleeper adapter must retain exact provider-ID mappings in a
+versioned crosswalk, use a corroborated authoritative identifier only where coverage exists, and
+leave unmatched/ambiguous individual players unresolved. `DEF` requires an exact provider
+team-code-to-season-valid team-defense mapping and never a name fallback.
+
+Sleeper's documentation describes the API as read-only and free for non-commercial use, requires
+no API token, advises staying below 1,000 calls per minute, and limits the full player catalog to
+roughly once per day because of its size. The documented failure set includes `400`, `404`, `429`,
+`500`, and `503`; runtime use must apply the approved bounded polling/backoff behavior and mark
+recommendations non-current rather than infer a missing observation.
+
 No identifier, player, user, league, roster, draft, cookie, credential, or raw payload was
 retained. The current evidence establishes a safe candidate league-backed pre-draft initialization
-route when all relationships are present, unique, and same-scoped. It remains insufficient for
-complete-pick recovery/reconciliation and individual-player/team-defense identity coverage; those
-gaps must remain visible unavailable outcomes.
+route when all relationships are present, unique, and same-scoped. The documented picks response
+was then checked against the active board: it returned `200`, six ordered, contiguous current
+picks with a stable provider player reference, draft slot, round, roster reference, matching draft
+identity, and metadata position for every entry. A reload restored the same board state before the
+comparison. Subsequent controlled test selections visibly covered `K` and `DEF`; the exact
+provider mapping gate for those assets is documented in the sanitized finding rather than copied
+from the private draft.
 
 ## Acceptance criteria
 
-- [ ] The finding records an exact supported URL rule and rejects nearby/unsupported surfaces.
-- [ ] It identifies a documented structured source for draft, user/roster/slot, configuration, and
+- [x] The finding records an exact supported URL rule and rejects nearby/unsupported surfaces.
+- [x] It identifies a documented structured source for draft, user/roster/slot, configuration, and
   ordered picks, or records each unavailable fact without guessing.
-- [ ] It establishes whether a complete pick response is authoritative enough for initialization,
+- [x] It establishes whether a complete pick response is authoritative enough for initialization,
   reload, missed-event recovery, and idempotent event construction.
-- [ ] It records every consumed field, retention/sanitization rule, terms/rate guidance, and
+- [x] It records every consumed field, retention/sanitization rule, terms/rate guidance, and
   private/non-commercial use limitation required to promote the source.
-- [ ] It establishes or explicitly rejects a safe Sleeper-player-ID to internal-identity route.
-- [ ] The evidence contains no credentials, cookies, invite URLs, real league/user identifiers,
+- [x] It explicitly rejects an automatic Sleeper-player-ID-to-internal-identity route and requires
+  a versioned exact mapping table; unresolved values remain a visible safe stop.
+- [x] The evidence contains no credentials, cookies, invite URLs, real league/user identifiers,
   or raw provider payloads.
 
 ## Validation
 
-- [ ] Run the fixture sanitizer/validator introduced by the finding and the applicable extension,
-  backend, documentation, and contract checks once implementation exists.
-- [ ] Confirm normal CI can execute entirely from sanitized fixtures and has no live Sleeper call.
+- [x] Run `./scripts/quality.sh docs`: Markdown links, existing ESPN fixture sanitization, and the
+  new Sleeper fixture validator all pass.
+- [x] Confirm the validator reads only committed synthetic fixture files and makes no live Sleeper
+  call. Extension/backend/contract checks remain the responsibility of the future adapter ticket.
 
 ## Completion summary
 
-Complete when closing the ticket, including the evidence supporting `Resolution: Done`.
+The approved extension-bound API design has now been backed by a sanitized, offline-testable
+finding. The next ticket may implement a Sleeper adapter only if it also builds the versioned
+individual-player and team-defense mapping route described here. This discovery result does not
+enable name matching, raw payload retention, a backend-to-Sleeper connection, or a runtime host
+permission by itself.
 
 ## History
 
@@ -141,3 +174,5 @@ Complete when closing the ticket, including the evidence supporting `Resolution:
 - 2026-08-22 — Started-draft mock confirms current-draft identity, ordered picks, player IDs, and draft-slot coverage; standalone mock lacks league configuration and roster ownership.
 - 2026-08-22 — Private test league confirms configuration, user/roster, and pre-draft slot mapping; K/DEF configuration exposes a current `LeagueConfig` compatibility gap.
 - 2026-08-22 — User approved K and DEF support; recorded neutral domain/data/model work as NFL-0038 rather than a Sleeper-only exception.
+- 2026-08-22 — Started the private test draft: the board restored visible ordered picks and active-clock state after reload, but an unclaimed CPU slot prevented further UI-only controlled picks. The public player catalog and documented rate/failure limits reject name-based or automatic Sleeper-to-nflverse identity mapping; exact, versioned mapping evidence remains required.
+- 2026-08-22 — Directly compared the documented current-picks response with the reloaded active board; it returned a contiguous, ordered, draft-scoped snapshot. Controlled private test picks visibly covered K and DEF. Added only synthetic derived fixtures, a local validator, and the dated finding; all documentation checks passed.

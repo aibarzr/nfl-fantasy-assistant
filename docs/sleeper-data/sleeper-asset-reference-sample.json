@@ -1,0 +1,23 @@
+{
+  "fixture_metadata": {
+    "source_class": "synthetic_validation_input",
+    "surface": "sleeper_nfl_draft",
+    "league_provider": "sleeper",
+    "captured_on": "2026-08-22",
+    "sanitization": {
+      "removed": [
+        "real player and team identifiers",
+        "player display names",
+        "request URLs, browser authentication material, and raw catalog payloads"
+      ],
+      "aliases": "Provider IDs are fixture-local aliases and cannot be used as live mappings."
+    },
+    "completeness": "Position/reference shape coverage only; not a live catalog or a crosswalk.",
+    "expected_parser_outcome": "K is an individual-player reference and DEF is a team-defense reference requiring an exact mapping."
+  },
+  "player_references": [
+    { "provider": "sleeper", "external_id": "player-fixture-qb", "position": "QB", "nfl_team": "team-fixture-01" },
+    { "provider": "sleeper", "external_id": "player-fixture-k", "position": "K", "nfl_team": "team-fixture-02" },
+    { "provider": "sleeper", "external_id": "defense-fixture-03", "position": "DEF", "nfl_team": "team-fixture-03" }
+  ]
+}
