@@ -3,10 +3,10 @@
 ## Current limitation
 
 The backend draft core and deterministic recommendation engine are implemented. The ESPN live
-adapter remains blocked on validated initialization/recovery evidence. Sleeper is approved for a
-read-only discovery spike only and must not be used for a live draft until its adapter, identity
-mapping, recovery evidence, and end-to-end acceptance fixture are complete. Neutral K/DEF
-domain-data-model support is complete.
+adapter remains blocked on validated initialization/recovery evidence. Sleeper can perform an
+on-demand, service-worker-only read-only recovery validation on its exact supported surface, but
+must not initialize a live draft until identity prepared-pool coverage and the end-to-end acceptance
+fixture are complete. Neutral K/DEF domain-data-model support is complete.
 
 ## Installation and startup checklist
 

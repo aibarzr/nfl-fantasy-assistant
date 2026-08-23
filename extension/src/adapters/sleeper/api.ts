@@ -14,6 +14,7 @@ type SleeperDraft = {
   type?: string;
   sport?: string;
   settings?: { teams?: number };
+  slot_to_roster_id?: Record<string, string>;
 };
 
 async function getJson(fetcher: typeof fetch, path: string): Promise<unknown> {
@@ -21,6 +22,10 @@ async function getJson(fetcher: typeof fetch, path: string): Promise<unknown> {
     method: "GET",
     credentials: "omit",
   });
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
+    throw new Error("Sleeper API response exceeds the adapter safety limit.");
+  }
   const payload = await response.text();
   if (!response.ok) {
     throw new Error(
@@ -63,6 +68,22 @@ export async function fetchSleeperRecoverySnapshot(
         "Sleeper draft metadata is not the supported 8-team NFL snake draft.",
     };
   }
+  if (
+    !draft.slot_to_roster_id ||
+    Object.keys(draft.slot_to_roster_id).length !== 8 ||
+    !Array.from({ length: 8 }, (_, index) => String(index + 1)).every(
+      (slot) =>
+        typeof draft.slot_to_roster_id?.[slot] === "string" &&
+        draft.slot_to_roster_id[slot].length > 0,
+    ) ||
+    new Set(Object.values(draft.slot_to_roster_id)).size !== 8
+  ) {
+    return {
+      status: "unavailable",
+      code: "invalid_draft_identity",
+      detail: "Sleeper draft metadata has no complete slot-to-roster mapping.",
+    };
+  }
   const picks = await getJson(fetcher, `/draft/${surface.draftId}/picks`);
   if (!Array.isArray(picks)) {
     return {
@@ -73,7 +94,8 @@ export async function fetchSleeperRecoverySnapshot(
   }
   return adaptSleeperRecoverySnapshot(
     surface.draftId,
-    picks as Parameters<typeof adaptSleeperRecoverySnapshot>[1],
+    picks,
     observedAt,
+    draft.slot_to_roster_id,
   );
 }

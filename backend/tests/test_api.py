@@ -165,6 +165,84 @@ def test_api_accepts_k_and_def_and_rejects_unknown_scoring_semantics(tmp_path: P
         assert rejected.json()["error"]["code"] == "validation_error"
 
 
+def test_api_accepts_sleeper_neutral_k_def_event_and_recovery_contract(tmp_path: Path) -> None:
+    token = generate_token()
+    app = create_app(tmp_path / "drafts.sqlite3", token, ORIGIN)
+    app.state.repository.save_player(Player("kicker-1", {"sleeper": "sleeper-k"}, "K", "K"))
+    app.state.repository.save_player(
+        Player("defense-1", {"sleeper": "sleeper-def"}, "D", "DEF", "CHI")
+    )
+    config = {
+        "config_version": "sleeper-semantic-v3-fixture",
+        "team_count": 8,
+        "draft_type": "snake",
+        "roster_slots": [
+            {"name": "K", "eligible_positions": ["K"], "is_bench": False},
+            {"name": "DEF", "eligible_positions": ["DEF"], "is_bench": False},
+        ],
+        "scoring_rules": {
+            "field_goals_made_50_plus": 5.0,
+            "defensive_points_allowed_0": 10.0,
+        },
+    }
+    opening = [f"team-{number}" for number in range(1, 9)]
+    with TestClient(app) as client:
+        league = client.post(
+            "/v1/leagues",
+            json={
+                "provider": "sleeper",
+                "provider_league_id": "league-fixture",
+                "config": config,
+            },
+            headers=headers(token),
+        )
+        assert league.status_code == 200
+        draft = client.post(
+            "/v1/drafts",
+            json={
+                "league_id": league.json()["league_id"],
+                "provider": "sleeper",
+                "provider_draft_id": "draft-fixture",
+                "config": config,
+                "user_team_id": "team-1",
+                "user_slot": 1,
+                "draft_order": [*opening, *reversed(opening)],
+                "dataset_version": "dataset-fixture",
+                "feature_version": "feature-fixture",
+                "model_version": "model-fixture",
+            },
+            headers=headers(token),
+        )
+        assert draft.status_code == 200
+        draft_id = draft.json()["draft_id"]
+        event = {
+            "event_id": "sleeper:draft-fixture:pick:1",
+            "observed_at": "2026-08-23T00:00:00Z",
+            "surface": "sleeper",
+            "league_provider": "sleeper",
+            "type": "player_drafted",
+            "pick": {
+                "overall_pick": 1,
+                "team_id": "team-1",
+                "player": {"provider": "sleeper", "external_id": "sleeper-k", "position": "K"},
+            },
+        }
+        accepted = client.post(f"/v1/drafts/{draft_id}/events", json=event, headers=headers(token))
+        assert accepted.status_code == 200
+        snapshot = client.post(
+            f"/v1/drafts/{draft_id}/snapshot",
+            json={
+                "source": "sleeper_api",
+                "observed_at": "2026-08-23T00:00:01Z",
+                "declared_complete": True,
+                "picks": [event["pick"]],
+            },
+            headers=headers(token),
+        )
+        assert snapshot.status_code == 200
+        assert snapshot.json()["draft"]["accepted_picks"] == 1
+
+
 def test_api_rejects_disallowed_origins_and_oversized_mutations_without_draft_state(
     tmp_path: Path,
 ) -> None:

@@ -11,7 +11,7 @@
 ## Canonical sources
 
 - [Data and Player Identity](../../data/data-and-identity.md#identity-resolution)
-- [Source Inventory](../../data/source-inventory.md#approved-for-discovery-and-local-identity-mapping-sleeper-read-only-api)
+- [Source Inventory](../../data/source-inventory.md#approved-for-bounded-recovery-validation-and-local-identity-mapping-sleeper-read-only-api)
 - [Domain Model](../../domain/domain-model.md#identity-resolution)
 - [Sleeper observability finding](../../sleeper-data/observability-finding-2026-08-22.md#identity-and-kdef)
 - [Development Guide](../../engineering/development.md#quality-gates)

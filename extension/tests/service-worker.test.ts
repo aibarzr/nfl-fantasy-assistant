@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { BackendApiClient } from "../src/api/client.js";
-import { handleWorkerRequest } from "../src/service-worker.js";
+import { handleWorkerRequest, isWorkerRequest } from "../src/service-worker.js";
 
 const configuration = {
   baseUrl: "http://127.0.0.1:8765",
@@ -9,6 +9,25 @@ const configuration = {
 };
 
 describe("service-worker relay", () => {
+  it("accepts a Sleeper recovery request only for the exact supported surface", () => {
+    expect(
+      isWorkerRequest({
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_recovery",
+        pageUrl: "https://sleeper.com/draft/nfl/draft-fixture",
+        observedAt: "2026-08-23T00:00:00Z",
+      }),
+    ).toBe(true);
+    expect(
+      isWorkerRequest({
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_recovery",
+        pageUrl: "https://sleeper.com/leagues/league-fixture",
+        observedAt: "2026-08-23T00:00:00Z",
+      }),
+    ).toBe(false);
+  });
+
   it("loads current configuration for every request so restart and token rotation need no memory", async () => {
     const configurations = [
       configuration,
@@ -64,5 +83,61 @@ describe("service-worker relay", () => {
       error: { kind: "unavailable", retryable: true },
     });
     expect(JSON.stringify(response)).not.toContain("a".repeat(43));
+  });
+
+  it("reads a validated Sleeper recovery snapshot without constructing a backend client", async () => {
+    const createClient = vi.fn();
+    const fetchSleeperRecovery = vi.fn(async () => ({
+      status: "ready" as const,
+      request: {
+        source: "sleeper_api" as const,
+        observed_at: "2026-08-23T00:00:00Z",
+        declared_complete: true,
+        picks: [],
+      },
+      eventIds: [],
+    }));
+    const response = await handleWorkerRequest(
+      {
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_recovery",
+        pageUrl: "https://sleeper.com/draft/nfl/draft-fixture",
+        observedAt: "2026-08-23T00:00:00Z",
+      },
+      {
+        loadConfiguration: async () => configuration,
+        createClient,
+        fetchSleeperRecovery,
+      },
+    );
+    expect(response).toMatchObject({ ok: true });
+    expect(createClient).not.toHaveBeenCalled();
+    expect(fetchSleeperRecovery).toHaveBeenCalledOnce();
+  });
+
+  it("returns a non-mutating validation error when Sleeper recovery is unsafe", async () => {
+    const createClient = vi.fn();
+    const response = await handleWorkerRequest(
+      {
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_recovery",
+        pageUrl: "https://sleeper.com/draft/nfl/draft-fixture",
+        observedAt: "2026-08-23T00:00:00Z",
+      },
+      {
+        loadConfiguration: async () => configuration,
+        createClient,
+        fetchSleeperRecovery: async () => ({
+          status: "unavailable",
+          code: "invalid_pick_snapshot",
+          detail: "Unsafe snapshot.",
+        }),
+      },
+    );
+    expect(response).toMatchObject({
+      ok: false,
+      error: { kind: "validation", retryable: false },
+    });
+    expect(createClient).not.toHaveBeenCalled();
   });
 });

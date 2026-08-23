@@ -47,9 +47,11 @@ must reject a team-defense reference that has no exact mapping or whose declared
 
 Sleeper documents its API as read-only, non-commercial, and token-free. It advises a ceiling of
 1,000 calls per minute and says the roughly 5 MB player catalog should be fetched no more than
-once per day. The adapter must use bounded polling and backoff for documented `400`, `404`, `429`,
-`500`, and `503` failures. The player catalog is a locally cached, versioned discovery/identity
-input, not a per-pick call.
+once per day. The implemented adapter may make an on-demand, service-worker-only recovery read of
+the documented draft and picks endpoints after exact-surface activation and local pairing. It does
+not poll, cache a pick list, submit a backend mutation, or initialize a live draft. Any future
+polling must add bounded backoff for documented `400`, `404`, `429`, `500`, and `503` failures. The
+player catalog remains a locally cached, versioned discovery/identity input, not a per-pick call.
 
-This finding authorizes a future adapter ticket; it does not itself add a host permission, runtime
-request, player mapping, or contract enum.
+This finding authorizes the bounded recovery-validation adapter. Identity prepared-pool coverage
+and an end-to-end acceptance fixture remain mandatory before live initialization.

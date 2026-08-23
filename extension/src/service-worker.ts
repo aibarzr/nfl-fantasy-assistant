@@ -6,6 +6,7 @@ import {
   type BackendConfiguration,
 } from "./api/client.js";
 import type { components } from "./api/generated-contract.js";
+import { detectSleeperDraftSurface } from "./adapters/sleeper/surface.js";
 import { loadPairedBackendConfiguration } from "./config/pairing.js";
 import { fetchSleeperRecoverySnapshot } from "./adapters/sleeper/api.js";
 import type { SleeperRecoveryResult } from "./adapters/sleeper/recovery-snapshot.js";
@@ -108,14 +109,28 @@ const dependencies: WorkerDependencies = {
     fetchSleeperRecoverySnapshot(pageUrl, observedAt),
 };
 
-function isWorkerRequest(value: unknown): value is WorkerRequest {
+const SLEEPER_PAGE_URL_MAX_LENGTH = 2_048;
+
+export function isWorkerRequest(value: unknown): value is WorkerRequest {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("type" in value) ||
+    value.type !== "nfl_fantasy_assistant_backend" ||
+    !("operation" in value) ||
+    typeof value.operation !== "string"
+  ) {
+    return false;
+  }
+  if (value.operation !== "sleeper_recovery") return true;
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "type" in value &&
-    value.type === "nfl_fantasy_assistant_backend" &&
-    "operation" in value &&
-    typeof value.operation === "string"
+    "pageUrl" in value &&
+    typeof value.pageUrl === "string" &&
+    value.pageUrl.length <= SLEEPER_PAGE_URL_MAX_LENGTH &&
+    detectSleeperDraftSurface(value.pageUrl).supported &&
+    "observedAt" in value &&
+    typeof value.observedAt === "string" &&
+    Number.isFinite(Date.parse(value.observedAt))
   );
 }
 

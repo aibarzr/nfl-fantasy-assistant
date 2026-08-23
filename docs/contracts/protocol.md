@@ -106,9 +106,11 @@ provider roster-position tokens, and every enabled provider scoring token before
 an unmapped roster or scoring token returns an unavailable result and cannot initialize a session.
 
 For Sleeper, a documented API response can be a complete snapshot only after the adapter validates
-its draft identity, ordering, and declared-completeness semantics against sanitized discovery
-evidence. A polling cycle is not itself a second canonical state owner; duplicate events and
-snapshots remain safe to resend to the backend.
+its draft identity, contiguous pick numbering, snake slot order, slot-to-roster consistency, and
+declared-completeness semantics against sanitized discovery evidence. Before the prepared-pool
+identity gate is satisfied, the adapter may validate a recovery snapshot but must not create a
+league/draft or submit an event/snapshot mutation. A polling cycle is not itself a second canonical
+state owner; duplicate events and snapshots remain safe to resend to the backend.
 
 ## Idempotency, ordering, and conflicts
 

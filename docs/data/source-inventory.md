@@ -33,16 +33,16 @@ and consumed columns in the future dataset manifest.
 | Credentials/retrieval | No credential, endpoint, scrape, captured response, ranking, ADP, or projection from FantasyPros may be added to source, fixtures, datasets, or runtime requests. The deferred FantasyPros browser surface is not evaluated here. |
 | Freshness/failure | No polling or cache is permitted. Its absence is not interpreted as a zero market score. |
 
-## Approved for discovery and local identity mapping: Sleeper read-only API
+## Approved for bounded recovery validation and local identity mapping: Sleeper read-only API
 
 | Metadata | Decision |
 |---|---|
 | Owner and interface | Sleeper, [Sleeper API](https://docs.sleeper.com/), read through an extension service-worker adapter rather than the backend. |
-| Permitted scope | Authorized private, non-commercial mock-draft discovery and the local, once-daily player-catalog snapshot required to build a versioned identity crosswalk. This approval does not add a draft-observation runtime request or authorize collecting credentials, browser-authentication material, invite URLs, or real league payloads. |
+| Permitted scope | Authorized private, non-commercial mock-draft discovery, on-demand service-worker recovery validation on the exact supported draft surface, and the local once-daily player-catalog snapshot required to build a versioned identity crosswalk. Recovery validation reads only documented draft/picks endpoints, produces neutral in-memory facts, and makes no backend mutation or live-draft initialization. It does not authorize collecting credentials, browser-authentication material, invite URLs, or real league payloads. |
 | Intended facts | Draft identity/type/order, user-to-roster/slot evidence, league configuration, ordered picks, provider individual-player and team-defense IDs, API failure/rate-limit behavior, and exact catalog fields needed for provider-to-internal identity mapping. |
 | Credentials and retention | The documented API is read-only and does not require an API token. Browser authentication material is never extracted or retained. The public player-catalog response is a local raw source snapshot with a manifest/checksum and is never committed; sanitized fixtures contain synthetic or redacted identifiers only. |
 | Identity and data use | Provider individual-player and team-defense IDs feed only the provider-to-internal identity validation path. They are not approved as a historical, market, or projection input. |
-| Required promotion evidence | Re-review current terms and rate guidance, exact endpoints/fields, supported draft semantics, complete-snapshot behavior, mapping coverage, polling/backoff policy, adapter host permissions, and manifest permissions before enabling runtime draft observation. |
+| Required promotion evidence | Re-review current terms and rate guidance, exact endpoints/fields, supported draft semantics, complete-snapshot behavior, mapping coverage, polling/backoff policy, adapter host permissions, and manifest permissions before enabling backend initialization or live draft observation. |
 | Failure behavior | API unavailability, malformed data, throttling, incomplete snapshots, or unresolved identity leave recommendations non-current; the adapter must not infer state from a partial page. |
 
 ## Market-prior fallback

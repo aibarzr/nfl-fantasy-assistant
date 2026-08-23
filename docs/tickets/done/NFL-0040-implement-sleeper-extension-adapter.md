@@ -1,7 +1,7 @@
 # NFL-0040 — Implement Sleeper extension adapter
 
-- Status: In Progress
-- Resolution: Unresolved
+- Status: Done
+- Resolution: Done
 - Phase: 5 — Live platform loops
 - Owner: Codex
 - Created: 2026-08-23
@@ -41,21 +41,20 @@ reconciliation requests.
 
 ## Acceptance criteria
 
-- [ ] The exact Sleeper surface and only that surface activates the adapter.
-- [ ] Provider requests originate only in the service worker after activation and validate bounded
+- [x] The exact Sleeper surface and only that surface activates the adapter.
+- [x] Provider requests originate only in the service worker after activation and validate bounded
   response shape, draft identity, 8-team snake order, and complete contiguous picks.
-- [ ] Initialization/recovery serializes only generated neutral contract types, including K/DEF
+- [x] Initialization/recovery serializes only generated neutral contract types, including K/DEF
   references; malformed/unresolved data creates no backend mutation.
-- [ ] Events are deterministic and idempotent by scoped draft ID plus pick number; reload and
+- [x] Events are deterministic and idempotent by scoped draft ID plus pick number; reload and
   worker restart reconcile from the complete snapshot.
-- [ ] The adapter refuses live initialization when the pinned prepared-pool crosswalk gate is not
+- [x] The adapter refuses live initialization when the pinned prepared-pool crosswalk gate is not
   satisfied.
 
 ## Blocker
 
-NFL-0039 has a validated local crosswalk but has not yet proven coverage of the actual prepared
-draft pool. This ticket may implement and test its safe adapter boundary, but cannot activate a
-real draft until that gate is complete.
+None. NFL-0039 still prevents live initialization by design; the completed adapter leaves that
+gate closed rather than creating a backend league/draft or submitting draft-state mutations.
 
 ## Implementation progress
 
@@ -69,6 +68,13 @@ read only the documented draft and picks endpoints; the worker rechecks the surf
 paired local configuration, bounds response size, and makes no backend mutation. DOM fallback and
 live initialization remain absent.
 
+## Completion summary
+
+Completed with exact-surface activation, service-worker-only documented draft/picks reads, bounded
+response handling, strict eight-team snake and slot-to-roster validation, and generated neutral
+K/DEF snapshot types. Unsafe recovery inputs never construct a backend client or produce a backend
+mutation; the absent prepared-pool crosswalk remains an explicit live-initialization stop.
+
 ## History
 
 - 2026-08-23 — Started after the user requested the Sleeper extension implementation; recorded the
@@ -79,3 +85,9 @@ live initialization remain absent.
 - 2026-08-23 — Added service-worker-only documented draft/picks retrieval with exact-surface,
   response-size, draft-scope, 8-team snake, and contiguous-snapshot checks. It is read-only and
   reports a validated recovery snapshot without submitting a draft mutation.
+- 2026-08-23 — Completed strict recovery validation: raw pick metadata, snake slot order, and
+  draft slot-to-roster consistency must all validate before a neutral snapshot exists. Synthetic
+  lifecycle and service-worker tests prove exact-surface activation, no backend client/mutation for
+  unsafe data, fresh recovery after worker reload, K/DEF references, deterministic event IDs, and
+  the prepared-pool gate. The source inventory and operations/protocol documentation now authorize
+  only this bounded, on-demand recovery read; live initialization remains unavailable.
