@@ -13,6 +13,7 @@ import { detectSleeperDraftSurface } from "./surface.js";
 
 const API_ORIGIN = "https://api.sleeper.app/v1";
 const MAX_RESPONSE_BYTES = 512 * 1024;
+const MAX_PLAYER_CATALOG_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 type SleeperDraft = {
   draft_id?: string;
@@ -25,13 +26,17 @@ type SleeperDraft = {
   draft_order?: Record<string, number> | null;
 };
 
-async function getJson(fetcher: typeof fetch, path: string): Promise<unknown> {
+async function getJson(
+  fetcher: typeof fetch,
+  path: string,
+  maxResponseBytes = MAX_RESPONSE_BYTES,
+): Promise<unknown> {
   const response = await fetcher(`${API_ORIGIN}${path}`, {
     method: "GET",
     credentials: "omit",
   });
   const contentLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
+  if (Number.isFinite(contentLength) && contentLength > maxResponseBytes) {
     throw new Error("Sleeper API response exceeds the adapter safety limit.");
   }
   const payload = await response.text();
@@ -40,10 +45,45 @@ async function getJson(fetcher: typeof fetch, path: string): Promise<unknown> {
       `Sleeper API request failed with status ${response.status}.`,
     );
   }
-  if (payload.length > MAX_RESPONSE_BYTES) {
+  if (payload.length > maxResponseBytes) {
     throw new Error("Sleeper API response exceeds the adapter safety limit.");
   }
   return JSON.parse(payload) as unknown;
+}
+
+/** Resolve only requested public catalog labels for local presentation. */
+export async function fetchSleeperPlayerLabels(
+  externalIds: readonly string[],
+  fetcher: typeof fetch = fetch,
+): Promise<Record<string, string>> {
+  const requested = new Set(externalIds.filter((value) => value.length > 0));
+  if (requested.size === 0) return {};
+  const catalog = await getJson(
+    fetcher,
+    "/players/nfl",
+    MAX_PLAYER_CATALOG_RESPONSE_BYTES,
+  );
+  if (
+    typeof catalog !== "object" ||
+    catalog === null ||
+    Array.isArray(catalog)
+  ) {
+    throw new Error("Sleeper player catalog is not an object.");
+  }
+  const labels: Record<string, string> = {};
+  for (const externalId of requested) {
+    const record = (catalog as Record<string, unknown>)[externalId];
+    if (
+      typeof record === "object" &&
+      record !== null &&
+      "full_name" in record &&
+      typeof record.full_name === "string" &&
+      record.full_name.trim().length > 0
+    ) {
+      labels[externalId] = record.full_name.trim();
+    }
+  }
+  return labels;
 }
 
 export async function fetchSleeperRecoverySnapshot(

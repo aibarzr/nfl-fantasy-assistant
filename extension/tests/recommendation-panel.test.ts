@@ -50,6 +50,8 @@ describe("recommendation status presentation", () => {
         candidates: [
           {
             internal_player_id: "player-<safe>",
+            provider: "sleeper",
+            external_id: "sleeper-safe",
             rank: 1,
             draft_score: 10.5,
             confidence: 0.8,
@@ -60,6 +62,7 @@ describe("recommendation status presentation", () => {
           },
         ],
       },
+      labels: { "sleeper-safe": "Safe Player" },
     });
 
     expect(markup).toContain('aria-live="polite"');
@@ -67,7 +70,8 @@ describe("recommendation status presentation", () => {
     expect(markup).toContain("model-v1");
     expect(markup).toContain(longWarning);
     expect(markup).toContain("overflow-wrap: anywhere");
-    expect(markup).toContain("player-&lt;safe&gt;");
+    expect(markup).toContain("Safe Player");
+    expect(markup).not.toContain("player-&lt;safe&gt;");
     expect(markup).not.toContain("<button");
   });
 

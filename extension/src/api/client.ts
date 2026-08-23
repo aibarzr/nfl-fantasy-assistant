@@ -176,7 +176,8 @@ export class BackendApiClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await this.fetcher(
+      const response = await this.fetcher.call(
+        globalThis,
         endpoint(this.options.configuration.baseUrl, path),
         {
           ...init,

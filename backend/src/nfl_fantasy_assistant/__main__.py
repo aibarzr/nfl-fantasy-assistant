@@ -48,6 +48,21 @@ def main() -> None:
     review_parser.add_argument("--external-id")
     review_parser.add_argument("--internal-player-id")
     review_parser.add_argument("--confirm", action="store_true")
+    external_review_parser = subparsers.add_parser(
+        "sleeper-external-review", help="Review local Wikidata identity candidates."
+    )
+    external_review_parser.add_argument("action", choices=("discover", "next", "status", "approve"))
+    external_review_parser.add_argument("--catalog-manifest", type=Path)
+    external_review_parser.add_argument("--catalog-snapshot", type=Path)
+    external_review_parser.add_argument("--state-database", type=Path)
+    external_review_parser.add_argument("--runtime-dataset", type=Path)
+    external_review_parser.add_argument("--candidates", type=Path, required=True)
+    external_review_parser.add_argument("--decisions", type=Path, required=True)
+    external_review_parser.add_argument("--external-id")
+    external_review_parser.add_argument("--internal-player-id")
+    external_review_parser.add_argument("--reviewer")
+    external_review_parser.add_argument("--reason")
+    external_review_parser.add_argument("--confirm", action="store_true")
     crosswalk_parser = subparsers.add_parser(
         "sleeper-crosswalk", help="Validate a versioned local Sleeper identity crosswalk."
     )
@@ -58,6 +73,8 @@ def main() -> None:
     crosswalk_parser.add_argument("--queue", type=Path, required=True)
     crosswalk_parser.add_argument("--decisions", type=Path, required=True)
     crosswalk_parser.add_argument("--team-transitions", type=Path)
+    crosswalk_parser.add_argument("--external-candidates", type=Path)
+    crosswalk_parser.add_argument("--external-decisions", type=Path)
     crosswalk_parser.add_argument(
         "--prepared-dataset",
         type=Path,
@@ -227,6 +244,131 @@ def main() -> None:
         print("Approved one exact Sleeper mapping candidate.")
         return
 
+    if arguments.command == "sleeper-external-review":
+        import hashlib
+        import json
+        import sqlite3
+
+        import pyarrow.parquet as pq  # type: ignore[import-untyped]
+
+        from nfl_fantasy_assistant.data.sleeper_external_identity import (
+            SleeperExternalIdentityDecision,
+            discover_wikidata_candidate,
+            load_external_identity_candidates,
+            load_external_identity_decisions,
+            write_external_identity_candidates,
+            write_external_identity_decisions,
+        )
+        from nfl_fantasy_assistant.data.sleeper_identity import parse_sleeper_catalog
+
+        if arguments.action in {"status", "next", "approve"}:
+            _, external_review_candidates = load_external_identity_candidates(arguments.candidates)
+            external_review_decisions = load_external_identity_decisions(arguments.decisions)
+            if arguments.action == "status":
+                print(
+                    "Reviewed "
+                    f"{len(external_review_decisions)} of "
+                    f"{len(external_review_candidates)} external identity candidates."
+                )
+                return
+            if arguments.action == "next":
+                decided = {decision.external_id for decision in external_review_decisions}
+                external_candidate = next(
+                    (row for row in external_review_candidates if row.external_id not in decided),
+                    None,
+                )
+                print(
+                    external_candidate
+                    if external_candidate is not None
+                    else "No external identity candidates remain."
+                )
+                return
+            external_candidate = next(
+                (
+                    row
+                    for row in external_review_candidates
+                    if row.external_id == arguments.external_id
+                    and row.internal_player_id == arguments.internal_player_id
+                ),
+                None,
+            )
+            if external_candidate is None:
+                parser.error("approval must match a queued external identity candidate exactly")
+            if not arguments.reviewer or not arguments.reason:
+                parser.error("approve requires --reviewer and --reason")
+            if any(
+                decision.external_id == external_candidate.external_id
+                for decision in external_review_decisions
+            ):
+                parser.error("candidate already has a recorded decision")
+            if not arguments.confirm:
+                print("Approval requires --confirm to write the local decision.")
+                return
+            write_external_identity_decisions(
+                (
+                    *external_review_decisions,
+                    SleeperExternalIdentityDecision(
+                        external_candidate.external_id,
+                        external_candidate.internal_player_id,
+                        arguments.reviewer,
+                        datetime.now(UTC).isoformat(),
+                        arguments.reason,
+                    ),
+                ),
+                arguments.decisions,
+            )
+            print("Approved one external Sleeper identity candidate.")
+            return
+
+        if not all(
+            (
+                arguments.catalog_manifest,
+                arguments.catalog_snapshot,
+                arguments.state_database,
+                arguments.runtime_dataset,
+            )
+        ):
+            parser.error("discover requires catalog, state database, and runtime dataset paths")
+        manifest = json.loads(arguments.catalog_manifest.read_text(encoding="utf-8"))
+        payload = arguments.catalog_snapshot.read_bytes()
+        if (
+            manifest.get("source") != "sleeper"
+            or manifest.get("dataset") != "players"
+            or hashlib.sha256(payload).hexdigest() != manifest.get("checksum_sha256")
+            or not isinstance(manifest.get("manifest_id"), str)
+        ):
+            parser.error("catalog manifest or snapshot is invalid")
+        catalog = {record.external_id: record for record in parse_sleeper_catalog(payload)}
+        try:
+            connection = sqlite3.connect(f"file:{arguments.state_database}?mode=ro", uri=True)
+            references = {
+                json.loads(row[0])["reference"]["external_id"]
+                for row in connection.execute(
+                    "SELECT observation_json FROM unresolved_observations"
+                )
+            }
+            connection.close()
+        except (sqlite3.Error, KeyError, TypeError, json.JSONDecodeError) as error:
+            parser.error(f"cannot read local unresolved observations: {error}")
+        identity_path = arguments.runtime_dataset / "asset_external_ids.parquet"
+        if not identity_path.exists():
+            parser.error("runtime dataset lacks a Sleeper identity table")
+        covered = {
+            str(row["external_id"])
+            for row in pq.read_table(identity_path, columns=["external_id"]).to_pylist()
+        }
+        discovered_candidates = tuple(
+            discovered
+            for reference in sorted(references - covered)
+            if (record := catalog.get(reference)) is not None
+            and (discovered := discover_wikidata_candidate(record)) is not None
+        )
+        write_external_identity_candidates(
+            discovered_candidates, arguments.candidates, source_manifest_id=manifest["manifest_id"]
+        )
+        print(f"Discovered {len(discovered_candidates)} external identity candidate(s) for review.")
+        return
+
     if arguments.command == "sleeper-crosswalk":
         import hashlib
         import json
@@ -236,6 +378,7 @@ def main() -> None:
         from nfl_fantasy_assistant.data.sleeper_identity import (
             SleeperTeamTransitionReview,
             build_approved_sleeper_crosswalk,
+            merge_external_observed_identities,
             parse_sleeper_catalog,
             publish_sleeper_crosswalk_dataset,
             require_sleeper_coverage,
@@ -283,8 +426,38 @@ def main() -> None:
             transition_checksum = hashlib.sha256(
                 arguments.team_transitions.read_bytes()
             ).hexdigest()
+        from nfl_fantasy_assistant.data.sleeper_identity import SleeperExternalObservedIdentity
+
+        external_identities: tuple[SleeperExternalObservedIdentity, ...] = ()
+        external_review_checksum: str | None = None
+        if bool(arguments.external_candidates) != bool(arguments.external_decisions):
+            parser.error("external candidates and decisions must be supplied together")
+        if arguments.external_candidates and arguments.external_decisions:
+            from nfl_fantasy_assistant.data.sleeper_external_identity import (
+                approve_external_identity_candidates,
+                load_external_identity_candidates,
+                load_external_identity_decisions,
+            )
+
+            candidate_manifest_id, external_candidates = load_external_identity_candidates(
+                arguments.external_candidates
+            )
+            if candidate_manifest_id != manifest["manifest_id"]:
+                parser.error("external candidate provenance does not match the catalog manifest")
+            external_decisions = load_external_identity_decisions(arguments.external_decisions)
+            external_identities = approve_external_identity_candidates(
+                external_candidates,
+                external_decisions,
+                parse_sleeper_catalog(catalog_payload),
+                source_manifest_id=manifest["manifest_id"],
+            )
+            external_review_checksum = hashlib.sha256(
+                arguments.external_candidates.read_bytes()
+                + arguments.external_decisions.read_bytes()
+            ).hexdigest()
+        players = read_curated_players_parquet(arguments.players)
         report = build_approved_sleeper_crosswalk(
-            read_curated_players_parquet(arguments.players),
+            players,
             parse_sleeper_catalog(catalog_payload),
             decisions,
             season=arguments.season,
@@ -295,6 +468,14 @@ def main() -> None:
             team_transition_reviews=transitions,
             team_transition_checksum=transition_checksum,
         )
+        if external_identities:
+            assert external_review_checksum is not None
+            report = merge_external_observed_identities(
+                report,
+                parse_sleeper_catalog(catalog_payload),
+                external_identities,
+                review_checksum=external_review_checksum,
+            )
         require_sleeper_coverage(
             report,
             (
@@ -319,6 +500,8 @@ def main() -> None:
                 arguments.prepared_dataset,
                 arguments.publication_root,
                 dataset_version=arguments.dataset_version,
+                players=players,
+                external_observed_identities=external_identities,
             )
             report = publication.report
             published_version = publication.version

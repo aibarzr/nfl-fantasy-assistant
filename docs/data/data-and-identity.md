@@ -95,6 +95,13 @@ Controlled fallback normalization may handle suffixes, apostrophes, hyphens, abb
 
 Manual overrides must be explicit rows with reason, provenance, timestamp, and supersession history. Never silently rewrite a mapping already used by an accepted draft event. A local review tool may offer a batch only for still-pending, one-to-one candidates generated from exact display name, position, and NFL team evidence and with no supplied GSIS or ESPN value. It must show the count first and require an explicit confirmation; entries with an authoritative identifier, duplicate candidate, conflict, or team-defense evidence remain individual review work.
 
+When an individual Sleeper reference has no corresponding curated player asset, the approved
+Wikidata route may generate one local, individual-review candidate using its catalog display name,
+position, and NFL team. It must contain a Wikidata entity ID plus an ESPN NFL or NFL.com
+identifier, and a reviewer must approve it explicitly. This creates only an identity-only observed
+asset: it is never an automatic name mapping, a curated historical player, or a recommendation
+candidate. The raw discovery response and local approval record are not committed.
+
 A completed local Sleeper crosswalk must pin the catalog manifest plus checksums of the curated
 player artifact, reviewed queue, and review decisions. It accepts reviewed entries only when they
 target the exact queued internal ID and do not contradict an exact catalog mapping or catalog

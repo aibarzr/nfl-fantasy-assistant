@@ -602,8 +602,16 @@
             "title": "Draft Score",
             "type": "number"
           },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
           "internal_player_id": {
             "title": "Internal Player Id",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
             "type": "string"
           },
           "rank": {
@@ -631,6 +639,8 @@
         },
         "required": [
           "internal_player_id",
+          "provider",
+          "external_id",
           "rank",
           "draft_score",
           "confidence",

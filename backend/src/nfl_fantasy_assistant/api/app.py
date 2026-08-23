@@ -215,6 +215,8 @@ class SnapshotResponse(ProtocolModel):
 
 class RecommendationCandidateResponse(ProtocolModel):
     internal_player_id: str
+    provider: str
+    external_id: str
     rank: int
     draft_score: float
     confidence: float
@@ -343,7 +345,10 @@ def create_app(
         credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     ) -> None:
         origin = request.headers.get("origin")
-        if origin != allowed_extension_origin:
+        # Chromium extension service-worker fetches can omit Origin.  CORS still
+        # restricts browser-origin requests, while the bearer token authenticates
+        # this originless extension-only transport path.
+        if origin is not None and origin != allowed_extension_origin:
             raise ApplicationError("disallowed_origin", "Request origin is not allowed.", 403)
         if credentials is None or credentials.scheme.lower() != "bearer":
             raise ApplicationError("unauthorized", "Valid bearer authentication is required.", 401)
@@ -380,7 +385,10 @@ def create_app(
             identity=ComponentReadiness(
                 status="ready" if dataset_ready else "degraded",
                 detail=(
-                    f"Loaded {sleeper_dataset.prepared_count} exact Sleeper prepared-pool mappings."
+                    "Loaded "
+                    f"{sleeper_dataset.identity_count or sleeper_dataset.prepared_count} "
+                    "exact Sleeper runtime mappings "
+                    f"({sleeper_dataset.prepared_count} recommendation-ready)."
                     if sleeper_dataset is not None
                     else "Only persisted exact identities are ready."
                 ),
@@ -567,6 +575,30 @@ def create_app(
                 "Recommendation provenance does not match the current draft revision.",
                 503,
             )
+        candidates: list[RecommendationCandidateResponse] = []
+        for candidate in snapshot.candidates:
+            player = repository.get_player(candidate.internal_player_id)
+            external_id = player.external_ids.get(state.provider) if player else None
+            if not external_id:
+                raise ApplicationError(
+                    "recommendations_not_current",
+                    "A recommendation candidate has no exact provider presentation reference.",
+                    503,
+                )
+            candidates.append(
+                RecommendationCandidateResponse(
+                    internal_player_id=candidate.internal_player_id,
+                    provider=state.provider,
+                    external_id=external_id,
+                    rank=candidate.rank,
+                    draft_score=candidate.draft_score,
+                    confidence=candidate.confidence,
+                    components=dict(candidate.components),
+                    reason_codes=list(candidate.reason_codes),
+                    reason_text=candidate.reason_text,
+                    warnings=list(candidate.warnings),
+                )
+            )
         return RecommendationResponse(
             status="current",
             draft_id=draft_id,
@@ -576,19 +608,7 @@ def create_app(
             feature_version=snapshot.feature_version,
             model_version=snapshot.model_version,
             source_updated_at=dict(snapshot.source_updated_at),
-            candidates=[
-                RecommendationCandidateResponse(
-                    internal_player_id=candidate.internal_player_id,
-                    rank=candidate.rank,
-                    draft_score=candidate.draft_score,
-                    confidence=candidate.confidence,
-                    components=dict(candidate.components),
-                    reason_codes=list(candidate.reason_codes),
-                    reason_text=candidate.reason_text,
-                    warnings=list(candidate.warnings),
-                )
-                for candidate in snapshot.candidates
-            ],
+            candidates=candidates,
         )
 
     return app

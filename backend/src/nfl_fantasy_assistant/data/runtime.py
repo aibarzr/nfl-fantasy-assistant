@@ -21,7 +21,11 @@ from .preparation import (
     read_prepared_recommendation_inputs_parquet,
     read_published_prepared_pool,
 )
-from .sleeper_identity import SLEEPER_COVERAGE_SCHEMA, SLEEPER_EXTERNAL_ID_SCHEMA
+from .sleeper_identity import (
+    SLEEPER_COVERAGE_SCHEMA,
+    SLEEPER_EXTERNAL_ID_SCHEMA,
+    SLEEPER_OBSERVED_IDENTITY_SCHEMA,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +38,7 @@ class ActivatedSleeperDataset:
     players: tuple[Player, ...]
     prepared_count: int
     recommendation_inputs: tuple[RuntimeRecommendationInput, ...] = ()
+    identity_count: int = 0
 
     @property
     def recommendations_ready(self) -> bool:
@@ -228,6 +233,66 @@ def _runtime_players(
     return tuple(sorted(players, key=lambda player: player.internal_player_id))
 
 
+def _runtime_observed_identity_players(
+    rows: list[dict[str, object]], mappings: list[dict[str, object]]
+) -> tuple[Player, ...]:
+    resolved_pairs = {
+        (mapping["internal_player_id"], mapping["external_id"])
+        for mapping in mappings
+        if mapping.get("provider") == "sleeper"
+        and mapping.get("validity_state") == "resolved"
+        and isinstance(mapping.get("internal_player_id"), str)
+        and isinstance(mapping.get("external_id"), str)
+    }
+    players: list[Player] = []
+    pairs: set[tuple[str, str]] = set()
+    for row in rows:
+        provider = row.get("provider")
+        external_id = row.get("external_id")
+        internal_player_id = row.get("internal_player_id")
+        position = row.get("position")
+        nfl_team = row.get("nfl_team")
+        asset_type = row.get("asset_type")
+        if (
+            provider != "sleeper"
+            or not isinstance(external_id, str)
+            or not external_id
+            or not isinstance(internal_player_id, str)
+            or not internal_player_id
+            or not isinstance(position, str)
+            or (nfl_team is not None and not isinstance(nfl_team, str))
+            or asset_type != ("team_defense" if position == "DEF" else "player")
+        ):
+            raise DataValidationError("runtime observed identity has invalid exact fields")
+        pair = (internal_player_id, external_id)
+        if pair in pairs:
+            raise DataValidationError("runtime observed identities have duplicate exact mappings")
+        pairs.add(pair)
+        try:
+            players.append(
+                Player(
+                    internal_player_id,
+                    {"sleeper": external_id},
+                    internal_player_id,
+                    position,
+                    nfl_team,
+                )
+            )
+        except ValueError as error:
+            raise DataValidationError(
+                "runtime observed identity is incompatible with the domain"
+            ) from error
+    if pairs != resolved_pairs:
+        raise DataValidationError(
+            "runtime observed identities do not match the resolved Sleeper crosswalk"
+        )
+    if len({player.internal_player_id for player in players}) != len(players):
+        raise DataValidationError("runtime observed identities have duplicate internal assets")
+    if len({player.external_ids["sleeper"] for player in players}) != len(players):
+        raise DataValidationError("runtime observed identities have duplicate Sleeper IDs")
+    return tuple(sorted(players, key=lambda player: player.internal_player_id))
+
+
 def activate_sleeper_dataset(version: Path) -> ActivatedSleeperDataset:
     """Validate one crosswalk-published dataset and expose only runtime-safe identity facts."""
     published: PublishedPreparedPool = read_published_prepared_pool(version)
@@ -246,7 +311,34 @@ def activate_sleeper_dataset(version: Path) -> ActivatedSleeperDataset:
         version / "sleeper_crosswalk_coverage.parquet", SLEEPER_COVERAGE_SCHEMA, "coverage"
     )
     _validate_coverage(published.players, coverage)
-    players = _runtime_players(published.players, mappings)
+    prepared_players = _runtime_players(published.players, mappings)
+    observed_identity_outputs = [
+        output
+        for output in published.manifest.outputs
+        if output.relative_path == "sleeper_observed_identities.parquet"
+    ]
+    if len(observed_identity_outputs) > 1:
+        raise DataValidationError("runtime dataset has ambiguous observed identity outputs")
+    players = prepared_players
+    if observed_identity_outputs:
+        observed_identities = _read_exact_table(
+            version / "sleeper_observed_identities.parquet",
+            SLEEPER_OBSERVED_IDENTITY_SCHEMA,
+            "observed identities",
+        )
+        players = _runtime_observed_identity_players(observed_identities, mappings)
+        prepared_by_id = {player.internal_player_id: player for player in prepared_players}
+        identity_by_id = {player.internal_player_id: player for player in players}
+        if any(
+            (identity := identity_by_id.get(identifier)) is None
+            or identity.position != player.position
+            or identity.external_ids != player.external_ids
+            or (player.position == "DEF" and identity.nfl_team != player.nfl_team)
+            for identifier, player in prepared_by_id.items()
+        ):
+            raise DataValidationError(
+                "runtime observed identities conflict with prepared Sleeper mappings"
+            )
     model_version = ProjectionParameters().model_version
     recommendation_inputs: tuple[RuntimeRecommendationInput, ...] = ()
     if "prepared_recommendation_inputs.parquet" in output_names:
@@ -275,4 +367,5 @@ def activate_sleeper_dataset(version: Path) -> ActivatedSleeperDataset:
         players,
         len(published.players),
         recommendation_inputs,
+        len(players),
     )

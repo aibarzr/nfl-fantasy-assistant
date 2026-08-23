@@ -66,6 +66,18 @@ describe("backend API client", () => {
     expect(fetcher.mock.calls[0]?.[0]).toContain("draft%2Fone/events");
   });
 
+  it("calls the browser transport with the service-worker global receiver", async () => {
+    let receiver: unknown;
+    const fetcher = function (this: unknown): Promise<Response> {
+      receiver = this;
+      return Promise.resolve(jsonResponse({ status: "ok", api_version: "v1" }));
+    } as typeof fetch;
+    const client = new BackendApiClient({ configuration, fetcher });
+
+    await expect(client.health()).resolves.toMatchObject({ status: "ok" });
+    expect(receiver).toBe(globalThis);
+  });
+
   it("classifies unauthorized, unavailable, and incompatible responses without exposing a token", async () => {
     const unauthorized = new BackendApiClient({
       configuration,

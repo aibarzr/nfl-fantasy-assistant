@@ -9,6 +9,7 @@ import type { components } from "./api/generated-contract.js";
 import { detectSleeperDraftSurface } from "./adapters/sleeper/surface.js";
 import {
   fetchSleeperInitializationSnapshot,
+  fetchSleeperPlayerLabels,
   fetchSleeperRecoverySnapshot,
 } from "./adapters/sleeper/api.js";
 import type { SleeperInitializationResult } from "./adapters/sleeper/initial-snapshot.js";
@@ -30,6 +31,7 @@ type RecommendationResponse = components["schemas"]["RecommendationResponse"];
 type SnapshotRequest = components["schemas"]["SnapshotRequest"];
 type SnapshotResponse = components["schemas"]["SnapshotResponse"];
 type DraftCreateRequest = components["schemas"]["DraftCreateRequest"];
+type SleeperPlayerLabels = Record<string, string>;
 
 export type WorkerRequest =
   | {
@@ -77,6 +79,11 @@ export type WorkerRequest =
     }
   | {
       type: "nfl_fantasy_assistant_backend";
+      operation: "sleeper_player_labels";
+      externalIds: string[];
+    }
+  | {
+      type: "nfl_fantasy_assistant_backend";
       operation: "sleeper_sync";
       draftId: string;
       pageUrl: string;
@@ -90,7 +97,8 @@ type WorkerSuccess =
   | DraftStateResponse
   | EventResponse
   | SnapshotResponse
-  | RecommendationResponse;
+  | RecommendationResponse
+  | SleeperPlayerLabels;
 
 type SleeperRecoveryResponse = Extract<
   SleeperRecoveryResult,
@@ -127,6 +135,9 @@ export interface WorkerDependencies {
     observedAt: string,
     context: SleeperInitializationConfiguration,
   ): Promise<SleeperInitializationResult>;
+  fetchSleeperPlayerLabels?(
+    externalIds: readonly string[],
+  ): Promise<Record<string, string>>;
 }
 
 const dependencies: WorkerDependencies = {
@@ -137,10 +148,14 @@ const dependencies: WorkerDependencies = {
   loadSleeperInitializationConfiguration,
   fetchSleeperInitialization: (pageUrl, observedAt, context) =>
     fetchSleeperInitializationSnapshot(pageUrl, observedAt, context),
+  fetchSleeperPlayerLabels,
 };
 
 const SLEEPER_PAGE_URL_MAX_LENGTH = 2_048;
 const DRAFT_ID_MAX_LENGTH = 256;
+const SLEEPER_LABEL_REQUEST_MAX = 12;
+const SLEEPER_EXTERNAL_ID_MAX_LENGTH = 128;
+const sleeperLabelCache = new Map<string, string>();
 
 export function isWorkerRequest(value: unknown): value is WorkerRequest {
   if (
@@ -152,6 +167,19 @@ export function isWorkerRequest(value: unknown): value is WorkerRequest {
     typeof value.operation !== "string"
   ) {
     return false;
+  }
+  if (value.operation === "sleeper_player_labels") {
+    return (
+      "externalIds" in value &&
+      Array.isArray(value.externalIds) &&
+      value.externalIds.length <= SLEEPER_LABEL_REQUEST_MAX &&
+      value.externalIds.every(
+        (externalId) =>
+          typeof externalId === "string" &&
+          externalId.length > 0 &&
+          externalId.length <= SLEEPER_EXTERNAL_ID_MAX_LENGTH,
+      )
+    );
   }
   if (
     value.operation !== "sleeper_recovery" &&
@@ -204,6 +232,18 @@ function errorResponse(error: unknown): WorkerResponse {
   };
 }
 
+function traceWorkerResponse(
+  request: WorkerRequest,
+  response: WorkerResponse,
+): void {
+  if (request.operation === "sleeper_sync" && response.ok) return;
+  console.info("[NFL Fantasy Assistant] worker relay", {
+    operation: request.operation,
+    outcome: response.ok ? "success" : "failure",
+    ...(response.ok ? {} : { errorKind: response.error.kind }),
+  });
+}
+
 function sleeperRuntimeIsReady(diagnostics: DiagnosticsResponse): boolean {
   return (
     diagnostics.data.status === "ready" &&
@@ -216,6 +256,30 @@ export async function handleWorkerRequest(
   injected: WorkerDependencies = dependencies,
 ): Promise<WorkerResponse> {
   try {
+    if (request.operation === "sleeper_player_labels") {
+      const missing = request.externalIds.filter(
+        (externalId) => !sleeperLabelCache.has(externalId),
+      );
+      if (missing.length > 0) {
+        const labels = await (
+          injected.fetchSleeperPlayerLabels ?? fetchSleeperPlayerLabels
+        )(missing);
+        for (const [externalId, label] of Object.entries(labels)) {
+          if (request.externalIds.includes(externalId)) {
+            sleeperLabelCache.set(externalId, label);
+          }
+        }
+      }
+      return {
+        ok: true,
+        data: Object.fromEntries(
+          request.externalIds.flatMap((externalId) => {
+            const label = sleeperLabelCache.get(externalId);
+            return label ? [[externalId, label]] : [];
+          }),
+        ),
+      };
+    }
     if (request.operation === "sleeper_recovery") {
       await injected.loadConfiguration();
       const recovery = await (
@@ -385,7 +449,10 @@ if (typeof chrome !== "undefined") {
   chrome.runtime.onMessage.addListener(
     (message: unknown, sender, sendResponse) => {
       if (sender.id !== chrome.runtime.id || !isWorkerRequest(message)) return;
-      void handleWorkerRequest(message).then(sendResponse);
+      void handleWorkerRequest(message).then((response) => {
+        traceWorkerResponse(message, response);
+        sendResponse(response);
+      });
       return true;
     },
   );

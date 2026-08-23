@@ -76,6 +76,43 @@ describe("Sleeper recovery adapter", () => {
     }
   });
 
+  it("normalizes an unordered, numeric-roster current pick prefix before validation", () => {
+    const picks = Array.from({ length: 11 }, (_, index) => {
+      const pickNumber = index + 1;
+      const draftSlot =
+        pickNumber <= 8 ? pickNumber : 8 - ((pickNumber - 1) % 8);
+      const playerId = `player-fixture-${String(pickNumber).padStart(2, "0")}`;
+      return {
+        draft_id: fixture.draft.draft_id,
+        pick_no: pickNumber,
+        draft_slot: draftSlot,
+        roster_id: draftSlot,
+        player_id: playerId,
+        metadata: { player_id: playerId, position: "RB", sport: "nfl" },
+      };
+    }).reverse();
+    const slotToRosterId = Object.fromEntries(
+      Array.from({ length: 8 }, (_, index) => [
+        String(index + 1),
+        String(index + 1),
+      ]),
+    );
+
+    const result = adaptSleeperRecoverySnapshot(
+      fixture.draft.draft_id,
+      picks,
+      "2026-08-23T00:00:00Z",
+      slotToRosterId,
+    );
+
+    expect(result).toMatchObject({ status: "ready" });
+    if (result.status === "ready") {
+      expect(result.request.picks.map((pick) => pick.overall_pick)).toEqual(
+        Array.from({ length: 11 }, (_, index) => index + 1),
+      );
+    }
+  });
+
   it("rejects cross-scoped or non-contiguous snapshots before backend submission", () => {
     expect(
       adaptSleeperRecoverySnapshot(

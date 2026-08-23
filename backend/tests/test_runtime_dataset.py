@@ -19,6 +19,7 @@ from nfl_fantasy_assistant.data.runtime import activate_sleeper_dataset
 from nfl_fantasy_assistant.data.sleeper_identity import (
     SLEEPER_COVERAGE_SCHEMA,
     SLEEPER_EXTERNAL_ID_SCHEMA,
+    SLEEPER_OBSERVED_IDENTITY_SCHEMA,
 )
 
 
@@ -31,7 +32,11 @@ def parquet_bytes(rows: list[dict[str, object]], schema: pa.Schema) -> bytes:
 
 
 def published_dataset(
-    root: Path, *, valid_coverage: bool = True, include_recommendation_inputs: bool = False
+    root: Path,
+    *,
+    valid_coverage: bool = True,
+    include_recommendation_inputs: bool = False,
+    include_observed_identity: bool = False,
 ) -> Path:
     version_name = "sleeper-runtime-fixture-v1"
     prepared = (
@@ -46,29 +51,43 @@ def published_dataset(
     write_prepared_parquet(prepared, temporary)
     prepared_bytes = temporary.read_bytes()
     temporary.unlink()
-    mappings = parquet_bytes(
-        [
+    mapping_rows: list[dict[str, object]] = [
+        {
+            "provider": "sleeper",
+            "external_id": "player-external",
+            "internal_player_id": "player-fixture",
+            "asset_type": "player",
+            "resolution_method": "fixture",
+            "provenance": "fixture",
+            "validity_state": "resolved",
+            "season": 2026,
+        },
+        {
+            "provider": "sleeper",
+            "external_id": "DET",
+            "internal_player_id": "defense-fixture",
+            "asset_type": "team_defense",
+            "resolution_method": "fixture",
+            "provenance": "fixture",
+            "validity_state": "resolved",
+            "season": 2026,
+        },
+    ]
+    if include_observed_identity:
+        mapping_rows.append(
             {
                 "provider": "sleeper",
-                "external_id": "player-external",
-                "internal_player_id": "player-fixture",
+                "external_id": "identity-only-external",
+                "internal_player_id": "identity-only-fixture",
                 "asset_type": "player",
                 "resolution_method": "fixture",
                 "provenance": "fixture",
                 "validity_state": "resolved",
                 "season": 2026,
-            },
-            {
-                "provider": "sleeper",
-                "external_id": "DET",
-                "internal_player_id": "defense-fixture",
-                "asset_type": "team_defense",
-                "resolution_method": "fixture",
-                "provenance": "fixture",
-                "validity_state": "resolved",
-                "season": 2026,
-            },
-        ],
+            }
+        )
+    mappings = parquet_bytes(
+        mapping_rows,
         SLEEPER_EXTERNAL_ID_SCHEMA,
     )
     coverage = parquet_bytes(
@@ -93,6 +112,39 @@ def published_dataset(
         "asset_external_ids.parquet": mappings,
         "sleeper_crosswalk_coverage.parquet": coverage,
     }
+    if include_observed_identity:
+        files["sleeper_observed_identities.parquet"] = parquet_bytes(
+            [
+                {
+                    "provider": "sleeper",
+                    "external_id": "player-external",
+                    "internal_player_id": "player-fixture",
+                    "position": "QB",
+                    "nfl_team": "CHI",
+                    "asset_type": "player",
+                    "season": 2026,
+                },
+                {
+                    "provider": "sleeper",
+                    "external_id": "DET",
+                    "internal_player_id": "defense-fixture",
+                    "position": "DEF",
+                    "nfl_team": "DET",
+                    "asset_type": "team_defense",
+                    "season": 2026,
+                },
+                {
+                    "provider": "sleeper",
+                    "external_id": "identity-only-external",
+                    "internal_player_id": "identity-only-fixture",
+                    "position": "WR",
+                    "nfl_team": "CHI",
+                    "asset_type": "player",
+                    "season": 2026,
+                },
+            ],
+            SLEEPER_OBSERVED_IDENTITY_SCHEMA,
+        )
     if include_recommendation_inputs:
         input_path = root / "recommendation-inputs.parquet"
         write_prepared_recommendation_inputs_parquet(
@@ -144,8 +196,19 @@ def published_dataset(
         )
         files["prepared_recommendation_inputs.parquet"] = input_path.read_bytes()
         input_path.unlink()
+    row_counts = {
+        "prepared.parquet": 2,
+        "asset_external_ids.parquet": len(mapping_rows),
+        "sleeper_crosswalk_coverage.parquet": 2,
+        **(
+            {"sleeper_observed_identities.parquet": len(mapping_rows)}
+            if include_observed_identity
+            else {}
+        ),
+        **({"prepared_recommendation_inputs.parquet": 2} if include_recommendation_inputs else {}),
+    }
     outputs = tuple(
-        OutputFile(name, hashlib.sha256(payload).hexdigest(), 2)
+        OutputFile(name, hashlib.sha256(payload).hexdigest(), row_counts[name])
         for name, payload in sorted(files.items())
     )
     manifest = dataset_manifest(
@@ -157,12 +220,13 @@ def published_dataset(
             "prepared": "v2",
             "asset_external_ids": "sleeper-v1",
             "sleeper_crosswalk_coverage": "v1",
+            **({"sleeper_observed_identities": "sleeper-v1"} if include_observed_identity else {}),
         },
         outputs,
         {name: True for name in DatasetPublisher.REQUIRED_CHECKS},
         ("fixture",),
     )
-    return DatasetPublisher(root).publish(manifest, files, {name: 2 for name in files})
+    return DatasetPublisher(root).publish(manifest, files, row_counts)
 
 
 def test_runtime_activation_loads_only_exact_prepared_sleeper_assets(tmp_path: Path) -> None:
@@ -192,6 +256,20 @@ def test_runtime_activation_loads_only_validated_recommendation_inputs(tmp_path:
         "defense-fixture",
     }
     assert activated.recommendation_inputs[1].value.components == {"market_prior": 0.7}
+
+
+def test_runtime_activation_loads_exact_identity_only_observed_assets(tmp_path: Path) -> None:
+    activated = activate_sleeper_dataset(
+        published_dataset(tmp_path / "prepared", include_observed_identity=True)
+    )
+
+    assert activated.prepared_count == 2
+    assert activated.identity_count == 3
+    assert {player.external_ids["sleeper"] for player in activated.players} == {
+        "player-external",
+        "DET",
+        "identity-only-external",
+    }
 
 
 def test_runtime_activation_rejects_bad_coverage_and_changed_outputs(tmp_path: Path) -> None:

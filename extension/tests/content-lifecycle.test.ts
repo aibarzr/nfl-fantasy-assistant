@@ -37,6 +37,7 @@ describe("ESPN content lifecycle", () => {
 
   it("mounts a visibly non-current status until a validated draft can be initialized", async () => {
     const { panel, states } = panelCapture();
+    const trace = vi.spyOn(console, "info").mockImplementation(() => undefined);
 
     await startEspnContentLifecycle(
       supportedUrl,
@@ -45,6 +46,10 @@ describe("ESPN content lifecycle", () => {
       () => panel,
     );
 
+    expect(trace).toHaveBeenCalledWith(
+      "[NFL Fantasy Assistant] content lifecycle",
+      { operation: "health", outcome: "success" },
+    );
     expect(states).toEqual([
       {
         kind: "loading",
@@ -57,6 +62,7 @@ describe("ESPN content lifecycle", () => {
           "Connected to the local backend. Waiting for a validated ESPN draft initialization.",
       },
     ]);
+    trace.mockRestore();
   });
 
   it("renders an explicit non-current error from the worker", async () => {

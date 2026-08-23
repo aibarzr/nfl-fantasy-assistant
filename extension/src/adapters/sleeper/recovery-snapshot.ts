@@ -1,4 +1,4 @@
-/** Translate a complete documented Sleeper picks response into neutral recovery facts. */
+/** Translate a complete current documented Sleeper picks response into neutral recovery facts. */
 
 import type { components } from "../../api/generated-contract.js";
 
@@ -44,6 +44,18 @@ function nonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function asRosterId(value: unknown): string | undefined {
+  if (nonEmptyString(value)) return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
+    return String(value);
+  }
+  return undefined;
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
 function expectedDraftSlot(pickNumber: number): number {
   const offset = (pickNumber - 1) % 8;
   return Math.floor((pickNumber - 1) / 8) % 2 === 0 ? offset + 1 : 8 - offset;
@@ -55,19 +67,16 @@ function asNflTeam(value: unknown): string | undefined {
     : undefined;
 }
 
-function parsePick(
-  value: unknown,
-  expectedPickNumber: number,
-): SleeperPick | undefined {
+function parsePick(value: unknown): SleeperPick | undefined {
   if (!isRecord(value) || !isRecord(value.metadata)) return undefined;
   const metadata = value.metadata;
+  const rosterId = asRosterId(value.roster_id);
   if (
     !nonEmptyString(value.draft_id) ||
-    !Number.isInteger(value.pick_no) ||
-    value.pick_no !== expectedPickNumber ||
-    !Number.isInteger(value.draft_slot) ||
-    value.draft_slot !== expectedDraftSlot(expectedPickNumber) ||
-    !nonEmptyString(value.roster_id) ||
+    !isPositiveInteger(value.pick_no) ||
+    !isPositiveInteger(value.draft_slot) ||
+    value.draft_slot > 8 ||
+    !rosterId ||
     !nonEmptyString(value.player_id) ||
     !nonEmptyString(metadata.player_id) ||
     metadata.player_id !== value.player_id ||
@@ -83,7 +92,7 @@ function parsePick(
     draft_id: value.draft_id,
     pick_no: value.pick_no,
     draft_slot: value.draft_slot,
-    roster_id: value.roster_id,
+    roster_id: rosterId,
     player_id: value.player_id,
     metadata: {
       player_id: metadata.player_id,
@@ -114,7 +123,7 @@ export function adaptSleeperRecoverySnapshot(
       detail: "Sleeper picks are not a bounded complete 8-team draft snapshot.",
     };
   }
-  const parsedPicks = picks.map((pick, index) => parsePick(pick, index + 1));
+  const parsedPicks = picks.map(parsePick);
   if (parsedPicks.some((pick) => pick === undefined)) {
     return {
       status: "unavailable",
@@ -123,7 +132,23 @@ export function adaptSleeperRecoverySnapshot(
         "Sleeper picks must be a complete contiguous 8-team snake snapshot.",
     };
   }
-  const verifiedPicks = parsedPicks as SleeperPick[];
+  const verifiedPicks = (parsedPicks as SleeperPick[]).sort(
+    (left, right) => left.pick_no - right.pick_no,
+  );
+  if (
+    verifiedPicks.some(
+      (pick, index) =>
+        pick.pick_no !== index + 1 ||
+        pick.draft_slot !== expectedDraftSlot(pick.pick_no),
+    )
+  ) {
+    return {
+      status: "unavailable",
+      code: "invalid_pick_snapshot",
+      detail:
+        "Sleeper picks must form one contiguous 8-team snake prefix through the current pick.",
+    };
+  }
   if (verifiedPicks.some((pick) => pick.draft_id !== draftId)) {
     return {
       status: "unavailable",

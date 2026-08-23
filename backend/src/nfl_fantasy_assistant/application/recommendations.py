@@ -71,14 +71,18 @@ class RecommendationRuntime:
         by_id = self._by_id
         drafted_positions: Counter[str] = Counter()
         for pick in session.accepted_picks:
-            position = by_id.get(pick.internal_player_id)
-            if position is None:
+            recommendation_input = by_id.get(pick.internal_player_id)
+            if recommendation_input is not None:
+                drafted_positions[recommendation_input.position] += 1
+                continue
+            identity = self.repository.get_player(pick.internal_player_id)
+            if identity is None:
                 raise ApplicationError(
                     "recommendations_not_current",
-                    "An accepted pick is outside the immutable prepared recommendation pool.",
+                    "An accepted pick has no exact immutable runtime identity.",
                     503,
                 )
-            drafted_positions[position.position] += 1
+            drafted_positions[identity.position] += 1
         available_ids = tuple(
             sorted(set(by_id) - {pick.internal_player_id for pick in session.accepted_picks})
         )

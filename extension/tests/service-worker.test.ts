@@ -43,6 +43,44 @@ describe("service-worker relay", () => {
         observedAt: "2026-08-23T00:00:00Z",
       }),
     ).toBe(true);
+    expect(
+      isWorkerRequest({
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_player_labels",
+        externalIds: ["player-1"],
+      }),
+    ).toBe(true);
+    expect(
+      isWorkerRequest({
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_player_labels",
+        externalIds: Array.from({ length: 13 }, () => "player-1"),
+      }),
+    ).toBe(false);
+  });
+
+  it("resolves current Sleeper labels in the worker without creating a backend client", async () => {
+    const createClient = vi.fn();
+    const fetchSleeperPlayerLabels = vi.fn(async () => ({
+      "player-1": "Safe Player",
+    }));
+
+    await expect(
+      handleWorkerRequest(
+        {
+          type: "nfl_fantasy_assistant_backend",
+          operation: "sleeper_player_labels",
+          externalIds: ["player-1"],
+        },
+        {
+          loadConfiguration: async () => configuration,
+          createClient,
+          fetchSleeperPlayerLabels,
+        },
+      ),
+    ).resolves.toEqual({ ok: true, data: { "player-1": "Safe Player" } });
+    expect(createClient).not.toHaveBeenCalled();
+    expect(fetchSleeperPlayerLabels).toHaveBeenCalledWith(["player-1"]);
   });
 
   it("loads current configuration for every request so restart and token rotation need no memory", async () => {

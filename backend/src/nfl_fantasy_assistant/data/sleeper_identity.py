@@ -53,6 +53,18 @@ SLEEPER_COVERAGE_SCHEMA = pa.schema(
     ]
 )
 
+SLEEPER_OBSERVED_IDENTITY_SCHEMA = pa.schema(
+    [
+        ("provider", pa.string()),
+        ("external_id", pa.string()),
+        ("internal_player_id", pa.string()),
+        ("position", pa.string()),
+        ("nfl_team", pa.string()),
+        ("asset_type", pa.string()),
+        ("season", pa.int32()),
+    ]
+)
+
 
 @dataclass(frozen=True, slots=True)
 class SleeperCatalogRecord:
@@ -121,6 +133,7 @@ class SleeperCrosswalkReport:
     prepared_pool_checksum: str | None = None
     prepared_pool_dataset_version: str | None = None
     prepared_pool_feature_version: str | None = None
+    external_identity_review_checksum: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +173,15 @@ class SleeperTeamTransitionReview:
     reviewer: str
     reviewed_at: str
     reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class SleeperExternalObservedIdentity:
+    """A reviewed, unscored individual asset absent from curated player data."""
+
+    mapping: IdentityMapping
+    position: str
+    nfl_team: str | None
 
 
 def build_sleeper_crosswalk(
@@ -309,6 +331,7 @@ def require_sleeper_prepared_pool_coverage(
         prepared_pool_checksum=prepared_pool_checksum,
         prepared_pool_dataset_version=prepared_pool_dataset_version,
         prepared_pool_feature_version=prepared_pool_feature_version,
+        external_identity_review_checksum=report.external_identity_review_checksum,
     )
 
 
@@ -386,6 +409,60 @@ def build_approved_sleeper_crosswalk(
         review_decisions_checksum=review_decisions_checksum,
         player_assets_checksum=player_assets_checksum,
         team_transition_checksum=team_transition_checksum,
+    )
+
+
+def merge_external_observed_identities(
+    report: SleeperCrosswalkReport,
+    catalog: Iterable[SleeperCatalogRecord],
+    identities: Iterable[SleeperExternalObservedIdentity],
+    *,
+    review_checksum: str,
+) -> SleeperCrosswalkReport:
+    """Add explicitly reviewed unscored identities without touching curated assets."""
+    if not review_checksum:
+        raise DataValidationError("external observed identities require review provenance")
+    records = {record.external_id: record for record in catalog}
+    mappings = {mapping.external_id: mapping for mapping in report.mappings}
+    unresolved = set(report.unresolved_external_ids)
+    external = tuple(identities)
+    if len({identity.mapping.external_id for identity in external}) != len(external):
+        raise DataValidationError("external observed identities contain duplicate references")
+    for identity in external:
+        mapping = identity.mapping
+        record = records.get(mapping.external_id)
+        if (
+            record is None
+            or mapping.external_id in mappings
+            or mapping.external_id not in unresolved
+            or mapping.provider != "sleeper"
+            or mapping.asset_type != "player"
+            or record.position == "DEF"
+            or identity.position != record.position
+            or identity.nfl_team != record.nfl_team
+        ):
+            raise DataValidationError("external observed identity conflicts with the crosswalk")
+        mappings[mapping.external_id] = mapping
+        unresolved.remove(mapping.external_id)
+    coverage: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
+    for record in records.values():
+        coverage[record.position][0] += 1
+        coverage[record.position][1 if record.external_id in mappings else 2] += 1
+    return SleeperCrosswalkReport(
+        source_manifest_id=report.source_manifest_id,
+        season=report.season,
+        mappings=tuple(sorted(mappings.values(), key=lambda mapping: mapping.external_id)),
+        unresolved_external_ids=tuple(sorted(unresolved)),
+        conflict_external_ids=report.conflict_external_ids,
+        coverage_by_position={
+            position: (counts[0], counts[1], counts[2])
+            for position, counts in sorted(coverage.items())
+        },
+        review_queue_checksum=report.review_queue_checksum,
+        review_decisions_checksum=report.review_decisions_checksum,
+        player_assets_checksum=report.player_assets_checksum,
+        team_transition_checksum=report.team_transition_checksum,
+        external_identity_review_checksum=review_checksum,
     )
 
 
@@ -575,6 +652,7 @@ def write_sleeper_crosswalk_report(report: SleeperCrosswalkReport, path: Path) -
             "review_decisions": report.review_decisions_checksum,
             "player_assets": report.player_assets_checksum,
             "team_transitions": report.team_transition_checksum,
+            "external_identity_review": report.external_identity_review_checksum,
         },
         "prepared_pool_coverage": (
             None
@@ -608,6 +686,8 @@ def publish_sleeper_crosswalk_dataset(
     publication_root: Path,
     *,
     dataset_version: str,
+    players: Iterable[CuratedPlayer],
+    external_observed_identities: Iterable[SleeperExternalObservedIdentity] = (),
 ) -> SleeperCrosswalkPublication:
     """Derive a new immutable dataset version that includes validated Sleeper identity evidence.
 
@@ -627,13 +707,60 @@ def publish_sleeper_crosswalk_dataset(
     ):
         raise DataValidationError("crosswalk report is not pinned to the supplied prepared dataset")
     inherited_outputs = {output.relative_path for output in parent.manifest.outputs}
-    additions = {"asset_external_ids.parquet", "sleeper_crosswalk_coverage.parquet"}
+    additions = {
+        "asset_external_ids.parquet",
+        "sleeper_crosswalk_coverage.parquet",
+        "sleeper_observed_identities.parquet",
+    }
     if inherited_outputs & additions:
         raise DataValidationError(
             "prepared dataset already has Sleeper crosswalk publication outputs"
         )
     if len({mapping.external_id for mapping in report.mappings}) != len(report.mappings):
         raise DataValidationError("Sleeper crosswalk has duplicate provider external IDs")
+    assets = {internal_player_id(player): player for player in players}
+    external_rows = tuple(external_observed_identities)
+    external_by_reference = {identity.mapping.external_id: identity for identity in external_rows}
+    if len(external_by_reference) != len(external_rows):
+        raise DataValidationError("external observed identities contain duplicate references")
+    observed_identities: list[dict[str, object]] = []
+    for mapping in report.mappings:
+        player = assets.get(mapping.internal_player_id)
+        external_identity = external_by_reference.get(mapping.external_id)
+        if player is None and external_identity is None:
+            raise DataValidationError("Sleeper mapping has no approved observed identity")
+        if player is not None and external_identity is not None:
+            raise DataValidationError("external observed identity duplicates a curated asset")
+        if player is not None:
+            position = player.position
+            nfl_team = player.nfl_team
+            expected_asset_type = "team_defense" if position == "DEF" else "player"
+        else:
+            assert external_identity is not None
+            if external_identity.mapping != mapping:
+                raise DataValidationError(
+                    "external observed identity does not match crosswalk mapping"
+                )
+            position = external_identity.position
+            nfl_team = external_identity.nfl_team
+            expected_asset_type = "player"
+        if mapping.asset_type != expected_asset_type:
+            raise DataValidationError("Sleeper mapping asset type conflicts with observed asset")
+        if position == "DEF" and not nfl_team:
+            raise DataValidationError("Sleeper defense identity lacks an NFL team")
+        observed_identities.append(
+            {
+                "provider": mapping.provider,
+                "external_id": mapping.external_id,
+                "internal_player_id": mapping.internal_player_id,
+                "position": position,
+                "nfl_team": nfl_team,
+                "asset_type": mapping.asset_type,
+                "season": report.season,
+            }
+        )
+    if len({row["internal_player_id"] for row in observed_identities}) != len(observed_identities):
+        raise DataValidationError("Sleeper observed identities have duplicate internal assets")
 
     repinned_players = tuple(
         PreparedPlayer(
@@ -697,6 +824,10 @@ def publish_sleeper_crosswalk_dataset(
             ],
             SLEEPER_EXTERNAL_ID_SCHEMA,
         )
+        files["sleeper_observed_identities.parquet"] = _parquet_bytes(
+            observed_identities,
+            SLEEPER_OBSERVED_IDENTITY_SCHEMA,
+        )
         files["sleeper_crosswalk_coverage.parquet"] = _parquet_bytes(
             [
                 {
@@ -717,6 +848,7 @@ def publish_sleeper_crosswalk_dataset(
         row_counts = {output.relative_path: output.row_count for output in parent.manifest.outputs}
         row_counts["prepared.parquet"] = len(repinned_players)
         row_counts["asset_external_ids.parquet"] = len(published_report.mappings)
+        row_counts["sleeper_observed_identities.parquet"] = len(observed_identities)
         row_counts["sleeper_crosswalk_coverage.parquet"] = len(
             published_report.coverage_by_position
         )
@@ -728,6 +860,7 @@ def publish_sleeper_crosswalk_dataset(
         schemas.update(
             {
                 "asset_external_ids": "sleeper-v1",
+                "sleeper_observed_identities": "sleeper-v1",
                 "sleeper_crosswalk_coverage": "v1",
             }
         )
@@ -739,7 +872,15 @@ def publish_sleeper_crosswalk_dataset(
             schemas,
             outputs,
             dict(parent.manifest.validation),
-            tuple(sorted({*parent.manifest.license_notes, "Sleeper non-commercial API"})),
+            tuple(
+                sorted(
+                    {
+                        *parent.manifest.license_notes,
+                        "Sleeper non-commercial API",
+                        *(("Wikidata CC0",) if external_rows else ()),
+                    }
+                )
+            ),
         )
         version = DatasetPublisher(publication_root).publish(manifest, files, row_counts)
         return SleeperCrosswalkPublication(version=version, report=published_report)

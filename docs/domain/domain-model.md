@@ -90,7 +90,9 @@ Compare a snapshot against accepted picks by overall pick number:
 - Snapshot contains an unobserved, resolvable next or gap pick: append in pick order and rebuild derived state atomically.
 - Snapshot omits accepted trailing picks: treat it as incomplete unless the adapter proves snapshot completeness.
 - Same pick number resolves to a different team or player: mark conflict and block fresh recommendations.
-- Unresolved player: preserve the observation and request resolution; do not guess availability.
+- Unresolved player: preserve one outstanding observation for its exact pick/team/reference and
+  request resolution; repeat observations of that same unresolved fact do not create duplicates or
+  guess availability.
 
 Reconciliation records its source, timestamp, differences, and outcome.
 

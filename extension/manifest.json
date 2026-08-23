@@ -11,8 +11,7 @@
     "https://api.sleeper.app/*"
   ],
   "background": {
-    "service_worker": "service-worker.js",
-    "type": "module"
+    "service_worker": "service-worker.js"
   },
   "content_scripts": [
     {

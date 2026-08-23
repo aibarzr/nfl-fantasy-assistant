@@ -153,6 +153,27 @@ def test_snapshot_repairs_only_missing_picks_and_rosters_are_derived(tmp_path: P
     assert [roster.team_id for roster in service.rosters(draft_id)] == list(dict.fromkeys(order()))
 
 
+def test_reconciliation_keeps_one_outstanding_unknown_observation(tmp_path: Path) -> None:
+    repository, service, draft_id = initialized(tmp_path)
+    snapshot = DraftSnapshot(
+        "sleeper_api",
+        datetime.now(UTC),
+        True,
+        (observed(1, "unknown"),),
+    )
+
+    first = service.reconcile(draft_id, snapshot)
+    second = service.reconcile(draft_id, snapshot)
+
+    state = repository.get_draft(draft_id)
+    assert state is not None
+    assert first.outcome == "partial"
+    assert second.outcome == "partial"
+    assert first.differences["unresolved"] == [1]
+    assert second.differences["unresolved"] == [1]
+    assert len(state.unresolved_observations) == 1
+
+
 def test_recommendation_provenance_survives_restart_and_rejects_stale_or_blocked_state(
     tmp_path: Path,
 ) -> None:

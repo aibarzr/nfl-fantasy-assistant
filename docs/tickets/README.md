@@ -66,9 +66,9 @@ Folders and ticket contents remain authoritative; this table is only an aggregat
 | 1 — Technical spikes | 4 | 4 | Complete — findings and safe-stop limits recorded for the 8-team ESPN MVP |
 | 2 — Data foundation | 6 | 6 | Complete — local immutable ingestion, curated/identity/feature transforms, baseline pool, and atomic versioned publication |
 | 3 — Backend draft core | 9 | 9 | Complete — loopback FastAPI, SQLite canonical state, idempotent observations, reconciliation, derived rosters/availability, checked v1 contracts, and recommendation provenance |
-| 4 — Baseline recommendation engine | 5 | 5 | Complete — deterministic projections, calibrated player value, dynamic replacement/VOR, explainable Top-N scoring, and time-safe promotion checks |
-| 5 — Live platform loops | 18 | 13 | In progress — ESPN initialization is blocked on identity, semantic-codebook, and recovery evidence; Sleeper scoring, immutable prepared-pool coverage, identity crosswalk, verified initialization handoff, runtime data activation, recommendation snapshots, and bounded recovery are complete, while end-to-end extension acceptance remains separate work |
-| **Total** | **46** | **41** | |
+| 4 — Baseline recommendation engine | 5 | 5 | Complete — deterministic projections, calibrated player value, dynamic replacement/VOR, scarcity, urgency, roster constraints, and explainable Top-N scoring |
+| 5 — Live platform loops | 29 | 14 | In progress — ESPN initialization is blocked on identity, semantic-codebook, and recovery evidence; Sleeper scoring, immutable prepared-pool coverage, identity crosswalk, verified initialization handoff, runtime data activation, recommendation snapshots, bounded recovery, and content-script packaging are complete, while originless service-worker authentication, relay tracing/validation, worker transport binding, live current-pick normalization, unresolved-observation deduplication, identity-only observed assets, externally reviewed identity recovery, current-candidate display labels, full prepared-pool coverage, and end-to-end extension acceptance remain separate work |
+| **Total** | **57** | **42** | |
 
 FantasyPros as a browser surface, Monte Carlo simulation, and in-season modules remain deferred in the roadmap and have no executable tickets yet.
 

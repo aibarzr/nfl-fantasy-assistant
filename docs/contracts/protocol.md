@@ -110,8 +110,12 @@ provider roster-position tokens, and every enabled provider scoring token before
 an unmapped roster or scoring token returns an unavailable result and cannot initialize a session.
 
 For Sleeper, a documented API response can be a complete snapshot only after the adapter validates
-its draft identity, contiguous pick numbering, snake slot order, slot-to-roster consistency, and
-declared-completeness semantics against sanitized discovery evidence. Before the prepared-pool
+its draft identity, a contiguous `1..n` current-pick prefix, snake slot order, slot-to-roster
+consistency, and declared-completeness semantics against sanitized discovery evidence. Complete
+means that the response includes every pick known by Sleeper at that observation time; it does not
+mean that the draft is finished or that `n` ends on a round boundary. The adapter canonicalizes
+transport ordering by pick number before validating the prefix, so unordered responses are safe
+only when every resulting number is unique and contiguous. Before the prepared-pool
 identity gate is satisfied, the adapter may validate a recovery snapshot but must not create a
 league/draft or submit an event/snapshot mutation. During an active initialized draft, the
 service-worker recovery loop polls the documented draft and picks endpoints at a five-second base
@@ -141,10 +145,13 @@ non-current outcome; it does not permit identity guessing or a version switch.
 
 ## Recommendations
 
-Each candidate contains internal draftable-asset ID, rank, draft score, confidence, normalized
-component scores, concise reason codes/text, and relevant uncertainty/freshness warnings. The
-response contains draft revision, generated timestamp, model version, feature version, dataset
-version, and source-update metadata.
+Each candidate contains internal draftable-asset ID, an exact provider/external-ID presentation
+reference, rank, draft score, confidence, normalized component scores, concise reason codes/text,
+and relevant uncertainty/freshness warnings. The extension may resolve that reference to a display
+label in its provider adapter. A provider catalog label is presentation-only: it is never posted to
+the backend, persisted in canonical state, or used to rank candidates. The response contains draft
+revision, generated timestamp, model version, feature version, dataset version, and source-update
+metadata.
 
 If state is blocked or inputs violate freshness policy, the endpoint returns an explicit non-current status and issues; it must not label an old result as current.
 

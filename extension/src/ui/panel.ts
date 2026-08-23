@@ -8,7 +8,11 @@ export type RecommendationResponse =
 
 export type RecommendationPanelState =
   | { kind: "loading"; detail: string }
-  | { kind: "current"; recommendation: RecommendationResponse }
+  | {
+      kind: "current";
+      recommendation: RecommendationResponse;
+      labels: Record<string, string>;
+    }
   | { kind: "empty"; detail: string }
   | { kind: "stale" | "blocked"; detail: string }
   | {
@@ -43,7 +47,10 @@ function score(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function candidateMarkup(candidate: Candidate): string {
+function candidateMarkup(
+  candidate: Candidate,
+  labels: Record<string, string>,
+): string {
   const components = Object.entries(candidate.components)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(
@@ -58,7 +65,7 @@ function candidateMarkup(candidate: Candidate): string {
     <article class="candidate">
       <div class="candidate__rank" aria-label="Rank ${candidate.rank}">${candidate.rank}</div>
       <div class="candidate__body">
-        <header><code>${text(candidate.internal_player_id)}</code><strong>${score(candidate.draft_score)}</strong></header>
+        <header><span class="candidate__name">${text(labels[candidate.external_id] ?? "Name unavailable")}</span><strong>${score(candidate.draft_score)}</strong></header>
         <p class="reason">${text(candidate.reason_text)}</p>
         <p class="codes">${candidate.reason_codes.map(text).join(" · ") || "Measured components"}</p>
         <dl class="metrics"><div><dt>Confidence</dt><dd>${score(candidate.confidence)}</dd></div></dl>
@@ -76,7 +83,7 @@ function stateMarkup(state: RecommendationPanelState): string {
     }
     return `
       <section class="recommendations" aria-label="Current recommendations">
-        ${recommendation.candidates.map(candidateMarkup).join("")}
+        ${recommendation.candidates.map((candidate) => candidateMarkup(candidate, state.labels)).join("")}
         <footer class="provenance">
           <span>Revision ${recommendation.revision}</span>
           <span>Model ${text(recommendation.model_version)}</span>
@@ -115,7 +122,7 @@ const styles = `
   .candidate__rank { display: grid; place-items: start center; color: #cf9d48; font: 700 24px/1 ui-monospace, "SFMono-Regular", monospace; }
   .candidate__body { min-width: 0; }
   .candidate header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  code { overflow-wrap: anywhere; color: #f4ead7; font: 600 12px/1.2 ui-monospace, "SFMono-Regular", monospace; }
+  .candidate__name { overflow-wrap: anywhere; color: #f4ead7; font-size: 18px; font-weight: 700; line-height: 1.1; }
   .candidate header strong { flex: none; color: #cf9d48; font: 700 20px/1 ui-monospace, "SFMono-Regular", monospace; }
   .reason { margin: 8px 0 3px; overflow-wrap: anywhere; font-size: 14px; line-height: 1.3; }
   .codes { margin: 0; color: #a9c0bd; overflow-wrap: anywhere; font: 10px/1.4 ui-monospace, "SFMono-Regular", monospace; text-transform: uppercase; }

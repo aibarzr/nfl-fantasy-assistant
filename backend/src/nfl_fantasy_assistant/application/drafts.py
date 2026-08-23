@@ -217,6 +217,15 @@ class DraftService:
             "conflicts": [],
             "unresolved": [],
         }
+        unresolved_keys = {
+            (
+                unresolved.overall_pick,
+                unresolved.team_id,
+                unresolved.reference.provider,
+                unresolved.reference.external_id,
+            )
+            for unresolved in state.unresolved_observations
+        }
         updated = state
         for number, accepted in accepted_by_pick.items():
             observed = observed_by_pick.get(number)
@@ -248,17 +257,34 @@ class DraftService:
             return ReconciliationResult("conflict", updated.revision, differences, updated)
         for number in sorted(set(observed_by_pick) - set(accepted_by_pick)):
             observed = observed_by_pick[number]
-            before = updated
+            unresolved_key = (
+                observed.overall_pick,
+                observed.team_id,
+                observed.player.provider,
+                observed.player.external_id,
+            )
+            if (
+                self._repository.find_player_by_external_id(
+                    observed.player.provider, observed.player.external_id
+                )
+                is None
+            ):
+                differences["unresolved"].append(number)
+                if unresolved_key not in unresolved_keys:
+                    updated = self._apply_observed_pick(
+                        updated, observed, snapshot.source, None, snapshot.observed_at
+                    )
+                    unresolved_keys.add(unresolved_key)
+                continue
             updated = self._apply_observed_pick(
                 updated, observed, snapshot.source, None, snapshot.observed_at
             )
-            if updated is not before:
-                differences["missing"].append(number)
+            differences["missing"].append(number)
         outcome = (
             "reconciled"
             if differences["missing"]
             else "partial"
-            if differences["partial"]
+            if differences["partial"] or differences["unresolved"]
             else "identical"
         )
         self._repository.commit_reconciliation(

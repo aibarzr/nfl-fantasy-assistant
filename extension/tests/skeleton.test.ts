@@ -7,6 +7,9 @@ describe("extension manifest", () => {
     });
 
     expect(manifest.default.manifest_version).toBe(3);
+    expect(manifest.default.background).toEqual({
+      service_worker: "service-worker.js",
+    });
     expect(manifest.default.permissions).toEqual(["storage"]);
     expect(manifest.default.host_permissions).toEqual([
       "http://127.0.0.1/*",

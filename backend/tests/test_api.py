@@ -90,7 +90,7 @@ def runtime_input(
     )
 
 
-def test_health_is_safe_and_all_other_resources_require_token_and_origin(tmp_path: Path) -> None:
+def test_health_is_safe_and_all_other_resources_require_a_token(tmp_path: Path) -> None:
     token = generate_token()
     app = create_app(tmp_path / "drafts.sqlite3", token, ORIGIN)
     with TestClient(app) as client:
@@ -99,13 +99,19 @@ def test_health_is_safe_and_all_other_resources_require_token_and_origin(tmp_pat
         assert health.json() == {"status": "ok", "api_version": "v1"}
         assert "X-Request-ID" in health.headers
         assert token not in health.text
-        assert client.get("/v1/diagnostics").status_code == 403
+        unauthenticated = client.get("/v1/diagnostics")
+        assert unauthenticated.status_code == 401
+        assert unauthenticated.json()["error"]["code"] == "unauthorized"
         unauthorized = client.get("/v1/diagnostics", headers={"Origin": ORIGIN})
         assert unauthorized.status_code == 401
         assert unauthorized.json()["error"]["code"] == "unauthorized"
         diagnostics = client.get("/v1/diagnostics", headers=headers(token))
         assert diagnostics.status_code == 200
         assert token not in diagnostics.text
+        originless_extension_worker = client.get(
+            "/v1/diagnostics", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert originless_extension_worker.status_code == 200
 
 
 def test_api_validates_creates_and_processes_idempotent_event(tmp_path: Path) -> None:
@@ -551,6 +557,7 @@ def test_api_returns_persisted_recommendation_warnings(tmp_path: Path) -> None:
         )
         state = app.state.repository.get_draft(DraftId(draft.json()["draft_id"]))
         assert state is not None
+        app.state.repository.save_player(Player("player-1", {"espn": "1"}, "Safe", "QB"))
         app.state.repository.save_recommendation(
             RecommendationSnapshot(
                 "rec-warnings",
@@ -583,3 +590,4 @@ def test_api_returns_persisted_recommendation_warnings(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert response.json()["candidates"][0]["warnings"] == ["market_stale"]
+    assert response.json()["candidates"][0]["external_id"] == "1"

@@ -42,3 +42,5 @@ The existing baseline decisions are captured in the project principles and archi
 - [ADR-0001: Local token pairing](0001-local-token-pairing.md)
 - [ADR-0002: Extension-bound provider API access](0002-extension-bound-provider-api-access.md)
 - [ADR-0003: Model team defenses as draftable assets](0003-model-team-defenses-as-draftable-assets.md)
+- [ADR-0004: Identity-only observed Sleeper assets](0004-identity-only-observed-sleeper-assets.md)
+- [ADR-0005: Wikidata external-identity candidates](0005-wikidata-external-identity-candidates.md)

@@ -48,6 +48,17 @@ function isHealthResponse(
   );
 }
 
+function traceContentResponse(
+  operation: string,
+  response: WorkerResponse,
+): void {
+  console.info("[NFL Fantasy Assistant] content lifecycle", {
+    operation,
+    outcome: response.ok ? "success" : "failure",
+    ...(response.ok ? {} : { errorKind: response.error.kind }),
+  });
+}
+
 export async function startEspnContentLifecycle(
   pageUrl = window.location.href,
   target?: HTMLElement,
@@ -67,6 +78,7 @@ export async function startEspnContentLifecycle(
     type: "nfl_fantasy_assistant_backend",
     operation: "health",
   })) as WorkerResponse;
+  traceContentResponse("health", response);
   if (!response.ok) {
     panel.render(stateFromApiError(response.error));
   } else if (
@@ -109,6 +121,7 @@ export async function startSleeperContentLifecycle(
     type: "nfl_fantasy_assistant_backend",
     operation: "health",
   })) as WorkerResponse;
+  traceContentResponse("health", response);
   if (!response.ok) {
     panel.render(stateFromApiError(response.error));
   } else if (
@@ -121,6 +134,7 @@ export async function startSleeperContentLifecycle(
       pageUrl,
       observedAt: new Date().toISOString(),
     })) as WorkerResponse;
+    traceContentResponse("sleeper_initialize", initialization);
     if (!initialization.ok) {
       panel.render(stateFromApiError(initialization.error));
     } else if (

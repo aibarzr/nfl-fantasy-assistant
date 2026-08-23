@@ -601,11 +601,13 @@ def test_sleeper_crosswalk_is_published_in_a_new_immutable_dataset_version(
         parent_version,
         root,
         dataset_version="prepared-with-sleeper-v1",
+        players=players,
     )
 
     assert publication.version == root / "versions" / "prepared-with-sleeper-v1"
     assert publication.report.prepared_pool_dataset_version == "prepared-with-sleeper-v1"
     assert (publication.version / "asset_external_ids.parquet").is_file()
+    assert (publication.version / "sleeper_observed_identities.parquet").is_file()
     assert (publication.version / "sleeper_crosswalk_coverage.parquet").is_file()
     published_pool = read_published_prepared_pool(publication.version)
     assert published_pool.dataset_version == "prepared-with-sleeper-v1"
