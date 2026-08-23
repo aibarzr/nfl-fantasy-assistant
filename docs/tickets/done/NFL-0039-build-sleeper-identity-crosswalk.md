@@ -1,7 +1,7 @@
 # NFL-0039 — Build Sleeper identity crosswalk
 
-- Status: Blocked
-- Resolution: Unresolved
+- Status: Done
+- Resolution: Done
 - Phase: 5 — Live platform loops
 - Owner: Codex
 - Created: 2026-08-22
@@ -104,26 +104,35 @@ available.
 
 ## Acceptance criteria
 
-- [ ] The published crosswalk has unique `(provider="sleeper", external_id)` keys, asset-type
+- [x] The published crosswalk has unique `(provider="sleeper", external_id)` keys, asset-type
   consistency, provenance, validity state, and a pinned version.
-- [ ] Individual-player matches require an exact corroborated route; missing or conflicting catalog
+- [x] Individual-player matches require an exact corroborated route; missing or conflicting catalog
   values remain unresolved or conflict rather than matching by name.
-- [ ] DEF resolves only through an exact provider-team/NFL-team/season-valid mapping; K resolves as
+- [x] DEF resolves only through an exact provider-team/NFL-team/season-valid mapping; K resolves as
   an individual player.
-- [ ] Coverage and conflict checks quantify every supported position and fail publication when a
+- [x] Coverage and conflict checks quantify every supported position and fail publication when a
   required asset is unmapped or ambiguous.
-- [ ] Synthetic fixtures and tests cover K, DEF, rookies, duplicate names, missing IDs, and
+- [x] Synthetic fixtures and tests cover K, DEF, rookies, duplicate names, missing IDs, and
   stale/changed mappings without a live Sleeper request.
-- [ ] Canonical data, source-inventory, domain, and operational documentation remain aligned.
+- [x] Canonical data, source-inventory, domain, and operational documentation remain aligned.
 
 ## Validation
 
-- [ ] Run applicable backend formatting, lint, type, test, build, documentation, and OpenAPI
+- [x] Run applicable backend formatting, lint, type, test, build, documentation, and OpenAPI
   contract checks.
-- [ ] Verify the test suite executes only from synthetic/local fixtures and no restricted or raw
+- [x] Verify the test suite executes only from synthetic/local fixtures and no restricted or raw
   provider payload is committed.
 
-## Blocker
+## Completion summary
+
+The local immutable `2026-sleeper-prepared-v1` dataset was validated against the checksum-pinned
+catalog, review queue, decisions, and team-transition reviews: all 300 prepared assets resolved,
+with zero conflicts. Publication produced immutable derived version
+`2026-sleeper-crosswalk-v1`, containing `asset_external_ids.parquet` and
+`sleeper_crosswalk_coverage.parquet`. Catalog entries outside the supported prepared pool remain
+explicitly unresolved and do not initialize a draft.
+
+## Historical blocker
 
 The original local Sleeper catalog snapshot no longer matches the checksum recorded in its source
 manifest. The user approved a renewed local queue built from a fresh verified snapshot: 897 of 899
@@ -190,3 +199,6 @@ results, and confirmation that unresolved references fail safely.
 - 2026-08-23 — Operator authorized local extension inspection of the test league and chose to
   preserve its exact K/DEF scoring. Moved to Blocked on NFL-0041 rather than asking the operator to
   simplify field-goal and defensive points-allowed bands.
+- 2026-08-23 — Resumed after NFL-0041's observed-key correction and NFL-0042's local dataset
+  publication. The prepared-pool validation resolved all 300 assets and published the derived
+  immutable crosswalk version with zero conflicts; completed.

@@ -16,6 +16,7 @@ from .errors import DataValidationError
 
 SCHEMA_VERSION = "4"
 SUPPORTED_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
+SIGNED_YARD_FIELDS = frozenset({"air_yards", "receiving_yards", "rushing_yards", "passing_yards"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +143,7 @@ def _number(row: Mapping[str, Any], name: str) -> float | None:
         number = float(value)
     except (TypeError, ValueError) as error:
         raise DataValidationError(f"{name} must be numeric") from error
-    if number < 0:
+    if number < 0 and name not in SIGNED_YARD_FIELDS:
         raise DataValidationError(f"{name} cannot be negative")
     return number
 

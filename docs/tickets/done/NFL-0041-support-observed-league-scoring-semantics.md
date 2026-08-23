@@ -82,6 +82,11 @@ strict extension-boundary translation to neutral `LeagueConfigInput`, PBP-bounda
 versioned deterministic projection behavior. `./scripts/quality.sh all` passed after the coherent
 Sleeper foundation commit, including generated-contract and clean-worktree drift checks.
 
+The reopened current-league verification is now also complete: the translator maps the observed
+`fum_lost`, `sack`, `int`, `fum_rec`, `fum_rec_td`, and `safe` keys to the neutral codebook. PBP
+now treats documented blocked field goals and PATs as kicker misses. No raw league response or
+identifier was retained.
+
 ## History
 
 - 2026-08-23 — Created after the operator chose to preserve scoring revealed through an authorized
@@ -110,3 +115,11 @@ Sleeper foundation commit, including generated-contract and clean-worktree drift
 - 2026-08-23 — Completed after `a5042a7` and a clean `./scripts/quality.sh all`: backend format,
   lint, type-check, 94 tests, OpenAPI contract, and build; extension format, lint, type-check, 32
   tests, and build; documentation/sanitization; and tracked/staged drift checks all passed.
+- 2026-08-23 — Reopened after an authorized current-league read proved that the real enabled
+  Sleeper D/ST keys are `sack`, `int`, `fum_rec`, `fum_rec_td`, and `safe`, rather than the
+  unobserved `def_*` aliases accepted by the original translator. The previous completion is not
+  sufficient until the adapter maps the observed keys to the neutral semantic codebook and its
+  tests cover that exact configuration.
+- 2026-08-23 — Completed the reopened work: extension tests cover the observed key vocabulary;
+  backend tests cover blocked FG/PAT miss semantics; and the real local prepared-pool build accepts
+  the resulting neutral configuration.

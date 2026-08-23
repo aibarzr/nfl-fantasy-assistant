@@ -188,6 +188,9 @@ def test_curation_validates_and_writes_repeatable_parquet(tmp_path: Path) -> Non
         curate_weeks([week_row(1), week_row(1)], "source-1")
     with pytest.raises(DataValidationError, match="snap_share"):
         curate_weeks([week_row(1, snap_share=1.1)], "source-1")
+    assert curate_weeks([week_row(1, rushing_yards=-3)], "source-1")[0].rushing_yards == -3
+    with pytest.raises(DataValidationError, match="cannot be negative"):
+        curate_weeks([week_row(1, rush_attempts=-1)], "source-1")
     with pytest.raises(DataValidationError, match="unsupported season/week"):
         curate_weeks([week_row(19)], "source-1")
 
@@ -842,6 +845,18 @@ def test_pbp_transform_publishes_exact_kicker_and_team_defense_assets(tmp_path: 
                 **base,
                 "posteam": "CHI",
                 "defteam": "DET",
+                "play_type": "field_goal",
+                "kicker_player_id": "00-kicker",
+                "kicker_player_name": "Kicker One",
+                "field_goal_attempt": 1,
+                "field_goal_result": "blocked",
+                "kick_distance": 42,
+                "total_home_score": 3,
+            },
+            {
+                **base,
+                "posteam": "CHI",
+                "defteam": "DET",
                 "play_type": "extra_point",
                 "kicker_player_id": "00-kicker",
                 "kicker_player_name": "Kicker One",
@@ -858,6 +873,17 @@ def test_pbp_transform_publishes_exact_kicker_and_team_defense_assets(tmp_path: 
                 "kicker_player_name": "Kicker One",
                 "extra_point_attempt": 1,
                 "extra_point_result": "failed",
+                "total_home_score": 10,
+            },
+            {
+                **base,
+                "posteam": "CHI",
+                "defteam": "DET",
+                "play_type": "extra_point",
+                "kicker_player_id": "00-kicker",
+                "kicker_player_name": "Kicker One",
+                "extra_point_attempt": 1,
+                "extra_point_result": "blocked",
                 "total_home_score": 10,
             },
             {
@@ -897,14 +923,15 @@ def test_pbp_transform_publishes_exact_kicker_and_team_defense_assets(tmp_path: 
     assert chicago.points_allowed == 0
     assert chicago.yards_allowed == 7
     kicker = next(row for row in weeks if row.source_player_id == "00-kicker")
-    assert kicker.field_goal_attempts == 2
-    assert kicker.field_goals_missed == 1
+    assert kicker.field_goal_attempts == 3
+    assert kicker.field_goals_missed == 2
     assert kicker.field_goals_made_50_plus == 1
     assert kicker.field_goals_missed_30_39 == 1
+    assert kicker.field_goals_missed_40_49 == 1
     assert kicker.field_goals_made_0_19 == 0
     assert kicker.field_goals_missed_50_plus == 0
     assert kicker.extra_points_made == 1
-    assert kicker.extra_points_missed == 1
+    assert kicker.extra_points_missed == 2
     with pytest.raises(DataValidationError, match="extra-point result"):
         transform_pbp_k_def(
             (

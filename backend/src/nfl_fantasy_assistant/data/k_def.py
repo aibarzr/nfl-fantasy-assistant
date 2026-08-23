@@ -226,38 +226,42 @@ def transform_pbp_k_def(
             record["field_goal_attempts"] = _as_number(
                 record.get("field_goal_attempts"), "field_goal_attempts"
             ) + float(is_field_goal)
+            field_goal_result = _text(row, "field_goal_result")
+            if is_field_goal and field_goal_result not in {"made", "missed", "blocked"}:
+                raise DataValidationError("field-goal result is not representable by scoring rules")
+            # Sleeper counts blocked field goals as missed kicks for the kicker.
+            scored_field_goal_result = (
+                "missed" if field_goal_result == "blocked" else field_goal_result
+            )
             record["field_goals_made"] = _as_number(
                 record.get("field_goals_made"), "field_goals_made"
-            ) + float(is_field_goal and _text(row, "field_goal_result") == "made")
+            ) + float(is_field_goal and scored_field_goal_result == "made")
             record["field_goals_missed"] = _as_number(
                 record.get("field_goals_missed"), "field_goals_missed"
-            ) + float(is_field_goal and _text(row, "field_goal_result") == "missed")
+            ) + float(is_field_goal and scored_field_goal_result == "missed")
             if is_field_goal:
-                result = _text(row, "field_goal_result")
-                if result not in {"made", "missed"}:
-                    raise DataValidationError(
-                        "field-goal result is not representable by scoring rules"
-                    )
                 band = _band(
                     _required_number(row, "kick_distance"),
                     FIELD_GOAL_DISTANCE_BANDS,
                     "kick_distance",
                 )
-                field = f"field_goals_{result}_{band}"
+                assert scored_field_goal_result is not None
+                field = f"field_goals_{scored_field_goal_result}_{band}"
                 record[field] = _as_number(record.get(field), field) + 1.0
             record["extra_point_attempts"] = _as_number(
                 record.get("extra_point_attempts"), "extra_point_attempts"
             ) + float(is_extra_point)
-            if is_extra_point and _text(row, "extra_point_result") not in {"good", "failed"}:
+            extra_point_result = _text(row, "extra_point_result")
+            if is_extra_point and extra_point_result not in {"good", "failed", "blocked"}:
                 raise DataValidationError(
                     "extra-point result is not representable by scoring rules"
                 )
             record["extra_points_made"] = _as_number(
                 record.get("extra_points_made"), "extra_points_made"
-            ) + float(is_extra_point and _text(row, "extra_point_result") == "good")
+            ) + float(is_extra_point and extra_point_result == "good")
             record["extra_points_missed"] = _as_number(
                 record.get("extra_points_missed"), "extra_points_missed"
-            ) + float(is_extra_point and _text(row, "extra_point_result") == "failed")
+            ) + float(is_extra_point and extra_point_result in {"failed", "blocked"})
 
     players: dict[str, dict[str, object]] = {}
     weeks: list[Mapping[str, object]] = []
