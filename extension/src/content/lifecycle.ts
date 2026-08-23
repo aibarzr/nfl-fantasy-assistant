@@ -5,19 +5,35 @@ import { detectSleeperDraftSurface } from "../adapters/sleeper/surface.js";
 import type { WorkerResponse } from "../service-worker.js";
 import { RecommendationPanel, stateFromApiError } from "../ui/panel.js";
 import type { RecommendationPanelState } from "../ui/panel.js";
+import {
+  renderRecommendations,
+  type SendRecommendationMessage,
+} from "./recommendations.js";
+import {
+  startSleeperLiveLoop,
+  type SendSleeperSyncMessage,
+  type SleeperLiveLoop,
+} from "./sleeper-live-loop.js";
 
-type SendMessage = (message: {
-  type: string;
-  operation: "health" | "sleeper_initialize" | "sleeper_recovery";
-  pageUrl?: string;
-  observedAt?: string;
-}) => Promise<unknown>;
+type SendMessage = SendSleeperSyncMessage &
+  ((message: {
+    type: string;
+    operation: "health" | "sleeper_initialize" | "sleeper_recovery";
+    pageUrl?: string;
+    observedAt?: string;
+  }) => Promise<unknown>);
 
 export interface RecommendationPanelController {
   render(state: RecommendationPanelState): void;
 }
 
 type CreatePanel = (target?: HTMLElement) => RecommendationPanelController;
+type StartSleeperLoop = (
+  draftId: string,
+  pageUrl: string,
+  panel: RecommendationPanelController,
+  sendMessage: SendSleeperSyncMessage,
+) => SleeperLiveLoop;
 
 function isHealthResponse(
   value: unknown,
@@ -79,6 +95,7 @@ export async function startSleeperContentLifecycle(
   sendMessage: SendMessage = (message) => chrome.runtime.sendMessage(message),
   createPanel: CreatePanel = (mountTarget) =>
     new RecommendationPanel(mountTarget ?? document.body),
+  startLoop: StartSleeperLoop = startSleeperLiveLoop,
 ): Promise<RecommendationPanelController | undefined> {
   if (!detectSleeperDraftSurface(pageUrl).supported) return undefined;
 
@@ -106,11 +123,24 @@ export async function startSleeperContentLifecycle(
     })) as WorkerResponse;
     if (!initialization.ok) {
       panel.render(stateFromApiError(initialization.error));
+    } else if (
+      typeof initialization.data === "object" &&
+      initialization.data !== null &&
+      "draft_id" in initialization.data &&
+      typeof initialization.data.draft_id === "string"
+    ) {
+      await renderRecommendations(
+        initialization.data.draft_id,
+        panel,
+        sendMessage as SendRecommendationMessage,
+      );
+      startLoop(initialization.data.draft_id, pageUrl, panel, sendMessage);
     } else {
       panel.render({
-        kind: "empty",
+        kind: "error",
         detail:
-          "Initialized the validated Sleeper draft with its pinned local data/model versions.",
+          "The local backend returned an invalid Sleeper initialization response.",
+        retryable: false,
       });
     }
   } else {

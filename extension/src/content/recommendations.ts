@@ -7,6 +7,16 @@ import {
   stateFromApiError,
 } from "../ui/panel.js";
 
+export type SendRecommendationMessage = (message: {
+  type: "nfl_fantasy_assistant_backend";
+  operation: "recommendations";
+  draftId: string;
+}) => Promise<unknown>;
+
+export interface RecommendationPanelRenderer {
+  render(state: Parameters<RecommendationPanel["render"]>[0]): void;
+}
+
 function isRecommendation(value: unknown): value is RecommendationResponse {
   return (
     typeof value === "object" &&
@@ -20,13 +30,15 @@ function isRecommendation(value: unknown): value is RecommendationResponse {
 
 export async function renderRecommendations(
   draftId: string,
-  panel = new RecommendationPanel(),
-): Promise<RecommendationPanel> {
+  panel: RecommendationPanelRenderer = new RecommendationPanel(),
+  sendMessage: SendRecommendationMessage = (message) =>
+    chrome.runtime.sendMessage(message),
+): Promise<RecommendationPanelRenderer> {
   panel.render({
     kind: "loading",
     detail: "Requesting the latest canonical draft state.",
   });
-  const response = (await chrome.runtime.sendMessage({
+  const response = (await sendMessage({
     type: "nfl_fantasy_assistant_backend",
     operation: "recommendations",
     draftId,

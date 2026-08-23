@@ -54,7 +54,7 @@ Rotation invalidates the old token and requires explicit extension re-pairing. B
 | Replay of a valid event | Idempotency returns the established result |
 | Event ID reused with changed payload | Return conflict and log correlation, preserving state |
 | Poisoned mapping/source data | Validate provenance/uniqueness, quarantine conflict, pin last valid version |
-| Provider API unavailable, throttled, or malformed | Stop fresh observations, retain canonical history, mark recommendations non-current, and retry with bounded backoff |
+| Provider API unavailable, throttled, or malformed | Stop fresh observations, retain canonical history, render a non-current state, and retry from a five-second base interval with capped exponential backoff (maximum sixty seconds) |
 | Extension fetches an unapproved host or page script requests provider data | Exact content-script matching, minimal host permissions, service-worker-only request path, and message validation |
 | Logs or fixtures expose user data | Structured redaction and fixture sanitization gates |
 | Compromised dependency | Lockfiles, minimal dependencies, review/update process and reproducible rebuild |

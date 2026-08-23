@@ -13,6 +13,7 @@ export {
   startSleeperContentLifecycle,
 } from "./lifecycle.js";
 export { renderRecommendations } from "./recommendations.js";
+export { startSleeperLiveLoop } from "./sleeper-live-loop.js";
 
 void startEspnContentLifecycle().then((panel) => {
   if (!panel) void startSleeperContentLifecycle();

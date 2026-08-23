@@ -1,7 +1,7 @@
 /** Trusted relay for neutral local API requests; it never exposes pairing material to pages. */
 
 import {
-  type ApiClientError,
+  ApiClientError,
   BackendApiClient,
   type BackendConfiguration,
 } from "./api/client.js";
@@ -74,6 +74,13 @@ export type WorkerRequest =
       operation: "sleeper_initialize";
       pageUrl: string;
       observedAt: string;
+    }
+  | {
+      type: "nfl_fantasy_assistant_backend";
+      operation: "sleeper_sync";
+      draftId: string;
+      pageUrl: string;
+      observedAt: string;
     };
 
 type WorkerSuccess =
@@ -133,6 +140,7 @@ const dependencies: WorkerDependencies = {
 };
 
 const SLEEPER_PAGE_URL_MAX_LENGTH = 2_048;
+const DRAFT_ID_MAX_LENGTH = 256;
 
 export function isWorkerRequest(value: unknown): value is WorkerRequest {
   if (
@@ -147,18 +155,26 @@ export function isWorkerRequest(value: unknown): value is WorkerRequest {
   }
   if (
     value.operation !== "sleeper_recovery" &&
-    value.operation !== "sleeper_initialize"
+    value.operation !== "sleeper_initialize" &&
+    value.operation !== "sleeper_sync"
   ) {
     return true;
   }
-  return (
+  const hasValidSurface =
     "pageUrl" in value &&
     typeof value.pageUrl === "string" &&
     value.pageUrl.length <= SLEEPER_PAGE_URL_MAX_LENGTH &&
     detectSleeperDraftSurface(value.pageUrl).supported &&
     "observedAt" in value &&
     typeof value.observedAt === "string" &&
-    Number.isFinite(Date.parse(value.observedAt))
+    Number.isFinite(Date.parse(value.observedAt));
+  return (
+    hasValidSurface &&
+    (value.operation !== "sleeper_sync" ||
+      ("draftId" in value &&
+        typeof value.draftId === "string" &&
+        value.draftId.length > 0 &&
+        value.draftId.length <= DRAFT_ID_MAX_LENGTH))
   );
 }
 
@@ -219,6 +235,78 @@ export async function handleWorkerRequest(
     }
     const client = injected.createClient(await injected.loadConfiguration());
     switch (request.operation) {
+      case "sleeper_sync": {
+        const diagnostics = await client.diagnostics();
+        if (!sleeperRuntimeIsReady(diagnostics)) {
+          return {
+            ok: false,
+            error: {
+              kind: "unavailable",
+              message:
+                "The local backend has no ready prepared data and exact identity mapping for Sleeper recovery.",
+              retryable: false,
+            },
+          };
+        }
+        const state = await client.getDraft(request.draftId);
+        const recovery = await (
+          injected.fetchSleeperRecovery ?? fetchSleeperRecoverySnapshot
+        )(request.pageUrl, request.observedAt);
+        if (recovery.status !== "ready") {
+          return {
+            ok: false,
+            error: {
+              kind: "validation",
+              message: recovery.detail,
+              retryable: false,
+            },
+          };
+        }
+        for (
+          let index = state.accepted_picks;
+          index < recovery.request.picks.length;
+          index += 1
+        ) {
+          const pick = recovery.request.picks[index];
+          const eventId = recovery.eventIds[index];
+          if (!pick || !eventId) {
+            return {
+              ok: false,
+              error: {
+                kind: "validation",
+                message:
+                  "Sleeper recovery has no stable event ID for an observed pick.",
+                retryable: false,
+              },
+            };
+          }
+          try {
+            await client.ingestEvent(request.draftId, {
+              event_id: eventId,
+              observed_at: recovery.request.observed_at,
+              surface: "sleeper",
+              league_provider: "sleeper",
+              type: "player_drafted",
+              pick,
+              protocol_version: "v1",
+            });
+          } catch (error) {
+            if (
+              !(error instanceof ApiClientError) ||
+              (error.kind !== "conflict" && error.kind !== "validation")
+            ) {
+              throw error;
+            }
+          }
+        }
+        return {
+          ok: true,
+          data: await client.reconcileSnapshot(
+            request.draftId,
+            recovery.request,
+          ),
+        };
+      }
       case "sleeper_initialize": {
         const diagnostics = await client.diagnostics();
         if (!sleeperRuntimeIsReady(diagnostics)) {

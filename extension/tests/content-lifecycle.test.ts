@@ -106,6 +106,9 @@ describe("Sleeper content lifecycle", () => {
       if (message.operation === "health") {
         return { ok: true, data: { status: "ok", api_version: "v1" } };
       }
+      if (message.operation === "recommendations") {
+        return { ok: true, data: { status: "current", candidates: [] } };
+      }
       return {
         ok: true,
         data: { draft_id: "draft-local" },
@@ -117,6 +120,7 @@ describe("Sleeper content lifecycle", () => {
       undefined,
       sendMessage,
       () => panel,
+      () => ({ stop: () => undefined }),
     );
 
     expect(sendMessage).toHaveBeenNthCalledWith(1, {
@@ -132,10 +136,7 @@ describe("Sleeper content lifecycle", () => {
       }),
     );
     expect(states.at(-1)).toMatchObject({
-      kind: "empty",
-      detail: expect.stringContaining(
-        "Initialized the validated Sleeper draft",
-      ),
+      kind: "current",
     });
   });
 
@@ -161,6 +162,7 @@ describe("Sleeper content lifecycle", () => {
       undefined,
       sendMessage,
       () => panel,
+      () => ({ stop: () => undefined }),
     );
 
     expect(states.at(-1)).toMatchObject({

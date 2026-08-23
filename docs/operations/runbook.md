@@ -7,8 +7,8 @@ adapter remains blocked on validated initialization/recovery evidence. Sleeper h
 service-worker-only initialization handoff on its exact supported surface, but it refuses both
 provider reads and backend mutations until the local prepared-data and identity runtime reports
 ready. Runtime dataset activation now uses an explicit immutable crosswalk-published version;
-recommendation activation, polling/backoff, and the end-to-end acceptance fixture remain
-outstanding. Neutral K/DEF domain-data-model support is complete.
+recommendation activation and bounded recovery polling are implemented, while the end-to-end
+acceptance fixture remains outstanding. Neutral K/DEF domain-data-model support is complete.
 
 ## Installation and startup checklist
 
@@ -57,7 +57,11 @@ Do not proceed with trusted recommendations while configuration, identity, or re
 Reload/reopen the supported page. The extension must reconnect, fetch or submit a complete-enough snapshot, and resume the existing internal draft ID. Confirm canonical pick count and current recommendation revision before relying on it.
 
 For a Sleeper adapter, the service worker must obtain a fresh validated API snapshot after reload;
-it must not recover from a cached page DOM or an unverified local pick list.
+it must not recover from a cached page DOM or an unverified local pick list. While the supported
+draft page remains open, it polls the documented draft and picks endpoints every five seconds;
+provider failure, throttling, malformed data, or an unsafe snapshot renders a non-current panel and
+backs off exponentially to at most sixty seconds. It resets to five seconds only after a complete
+validated cycle.
 
 ### Backend restart
 

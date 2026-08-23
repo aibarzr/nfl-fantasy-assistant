@@ -11,9 +11,9 @@ approved second provider: its extension-bound, read-only API discovery is comple
 validated initialization/recovery source plus strict versioned identity-mapping gates. K and DEF
 are supported MVP assets with completed neutral domain/data/model support, observed scoring-key
 translation, a versioned published identity crosswalk, and a verified extension-to-backend
-initialization handoff. Runtime activation of the prepared dataset/identity mapping and verified
-recommendation inputs is complete; polling/backoff and end-to-end extension acceptance remain
-outstanding before trusted live recommendations can be released. The Phase 4
+initialization handoff. Runtime activation of the prepared dataset/identity mapping, verified
+recommendation inputs, and bounded polling/backoff are complete; end-to-end extension acceptance
+remains outstanding before trusted live recommendations can be released. The Phase 4
 recommendation engine is complete.
 
 ## Delivery phases

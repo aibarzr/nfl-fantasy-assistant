@@ -34,6 +34,15 @@ describe("service-worker relay", () => {
         observedAt: "2026-08-23T00:00:00Z",
       }),
     ).toBe(true);
+    expect(
+      isWorkerRequest({
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_sync",
+        draftId: "draft-local",
+        pageUrl: "https://sleeper.com/draft/nfl/draft-fixture",
+        observedAt: "2026-08-23T00:00:00Z",
+      }),
+    ).toBe(true);
   });
 
   it("loads current configuration for every request so restart and token rotation need no memory", async () => {
@@ -147,6 +156,190 @@ describe("service-worker relay", () => {
       error: { kind: "validation", retryable: false },
     });
     expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("submits new Sleeper picks with stable IDs before reconciling the complete snapshot", async () => {
+    const calls: Array<{ url: string; body?: string }> = [];
+    const client = new BackendApiClient({
+      configuration,
+      fetcher: async (url, init) => {
+        calls.push({
+          url: String(url),
+          body: init?.body as string | undefined,
+        });
+        if (String(url).endsWith("/v1/diagnostics")) {
+          return new Response(
+            JSON.stringify({
+              api_version: "v1",
+              database: { status: "ready", detail: "fixture" },
+              data: { status: "ready", detail: "fixture" },
+              identity: { status: "ready", detail: "fixture" },
+              adapter: { status: "unavailable", detail: "fixture" },
+              recommendations: { status: "ready", detail: "fixture" },
+            }),
+            { status: 200 },
+          );
+        }
+        if (String(url).endsWith("/v1/drafts/draft-local")) {
+          return new Response(
+            JSON.stringify({
+              draft_id: "draft-local",
+              accepted_picks: 0,
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            outcome: "reconciled",
+            revision: 1,
+            differences: {},
+            draft: { status: "active", reconciliation_state: "current" },
+          }),
+          { status: 200 },
+        );
+      },
+    });
+    const response = await handleWorkerRequest(
+      {
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_sync",
+        draftId: "draft-local",
+        pageUrl: "https://sleeper.com/draft/nfl/draft-fixture",
+        observedAt: "2026-08-23T00:00:00Z",
+      },
+      {
+        loadConfiguration: async () => configuration,
+        createClient: () => client,
+        fetchSleeperRecovery: async () => ({
+          status: "ready",
+          request: {
+            source: "sleeper_api",
+            observed_at: "2026-08-23T00:00:00Z",
+            declared_complete: true,
+            picks: [
+              {
+                overall_pick: 1,
+                team_id: "roster-1",
+                player: {
+                  provider: "sleeper",
+                  external_id: "player-1",
+                  position: "RB",
+                },
+              },
+            ],
+          },
+          eventIds: ["sleeper:draft-fixture:pick:1"],
+        }),
+      },
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: { outcome: "reconciled" },
+    });
+    expect(calls.map((call) => call.url)).toEqual([
+      "http://127.0.0.1:8765/v1/diagnostics",
+      "http://127.0.0.1:8765/v1/drafts/draft-local",
+      "http://127.0.0.1:8765/v1/drafts/draft-local/events",
+      "http://127.0.0.1:8765/v1/drafts/draft-local/snapshot",
+    ]);
+    expect(calls[2]?.body).toContain(
+      '"event_id":"sleeper:draft-fixture:pick:1"',
+    );
+  });
+
+  it("does not submit an event or snapshot when a sync recovery response is unsafe", async () => {
+    const calls: string[] = [];
+    const client = new BackendApiClient({
+      configuration,
+      fetcher: async (url) => {
+        calls.push(String(url));
+        if (String(url).endsWith("/v1/diagnostics")) {
+          return new Response(
+            JSON.stringify({
+              api_version: "v1",
+              database: { status: "ready", detail: "fixture" },
+              data: { status: "ready", detail: "fixture" },
+              identity: { status: "ready", detail: "fixture" },
+              adapter: { status: "unavailable", detail: "fixture" },
+              recommendations: { status: "ready", detail: "fixture" },
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({ draft_id: "draft-local", accepted_picks: 0 }),
+          { status: 200 },
+        );
+      },
+    });
+    const response = await handleWorkerRequest(
+      {
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_sync",
+        draftId: "draft-local",
+        pageUrl: "https://sleeper.com/draft/nfl/draft-fixture",
+        observedAt: "2026-08-23T00:00:00Z",
+      },
+      {
+        loadConfiguration: async () => configuration,
+        createClient: () => client,
+        fetchSleeperRecovery: async () => ({
+          status: "unavailable",
+          code: "invalid_pick_snapshot",
+          detail: "Unsafe snapshot.",
+        }),
+      },
+    );
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { kind: "validation", retryable: false },
+    });
+    expect(calls).toEqual([
+      "http://127.0.0.1:8765/v1/diagnostics",
+      "http://127.0.0.1:8765/v1/drafts/draft-local",
+    ]);
+  });
+
+  it("does not read Sleeper recovery when the local runtime is no longer ready", async () => {
+    const fetchSleeperRecovery = vi.fn();
+    const client = new BackendApiClient({
+      configuration,
+      fetcher: async () =>
+        new Response(
+          JSON.stringify({
+            api_version: "v1",
+            database: { status: "ready", detail: "fixture" },
+            data: { status: "unavailable", detail: "fixture" },
+            identity: { status: "unavailable", detail: "fixture" },
+            adapter: { status: "unavailable", detail: "fixture" },
+            recommendations: { status: "unavailable", detail: "fixture" },
+          }),
+          { status: 200 },
+        ),
+    });
+    const response = await handleWorkerRequest(
+      {
+        type: "nfl_fantasy_assistant_backend",
+        operation: "sleeper_sync",
+        draftId: "draft-local",
+        pageUrl: "https://sleeper.com/draft/nfl/draft-fixture",
+        observedAt: "2026-08-23T00:00:00Z",
+      },
+      {
+        loadConfiguration: async () => configuration,
+        createClient: () => client,
+        fetchSleeperRecovery,
+      },
+    );
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { kind: "unavailable", retryable: false },
+    });
+    expect(fetchSleeperRecovery).not.toHaveBeenCalled();
   });
 
   it("submits a verified Sleeper initialization through the neutral league and draft endpoints", async () => {

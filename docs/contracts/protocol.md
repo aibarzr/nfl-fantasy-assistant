@@ -113,8 +113,13 @@ For Sleeper, a documented API response can be a complete snapshot only after the
 its draft identity, contiguous pick numbering, snake slot order, slot-to-roster consistency, and
 declared-completeness semantics against sanitized discovery evidence. Before the prepared-pool
 identity gate is satisfied, the adapter may validate a recovery snapshot but must not create a
-league/draft or submit an event/snapshot mutation. A polling cycle is not itself a second canonical
-state owner; duplicate events and snapshots remain safe to resend to the backend.
+league/draft or submit an event/snapshot mutation. During an active initialized draft, the
+service-worker recovery loop polls the documented draft and picks endpoints at a five-second base
+interval (24 provider calls/minute), backs off exponentially to a sixty-second maximum after an
+unsafe or failed response, and resets only after a complete validated cycle. A polling cycle is not
+itself a second canonical state owner; it sends stable per-pick event IDs for newly observed
+contiguous picks and then reconciles the full snapshot. Duplicate events and snapshots remain safe
+to resend to the backend.
 
 The initialization adapter receives a per-device opaque provider user ID and pinned dataset,
 feature, and model versions only from extension storage. It must prove that the configured user is
