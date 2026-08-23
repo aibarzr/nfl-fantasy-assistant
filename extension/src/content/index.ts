@@ -1,10 +1,19 @@
 /** Content scripts host adapter lifecycle and UI rendering, never draft strategy. */
 
-import { startEspnContentLifecycle } from "./lifecycle.js";
+import {
+  startEspnContentLifecycle,
+  startSleeperContentLifecycle,
+} from "./lifecycle.js";
 
 export { detectEspnDraftSurface } from "../adapters/espn/surface.js";
+export { detectSleeperDraftSurface } from "../adapters/sleeper/surface.js";
 export { validateEspnPageMessage } from "./page-messages.js";
-export { startEspnContentLifecycle } from "./lifecycle.js";
+export {
+  startEspnContentLifecycle,
+  startSleeperContentLifecycle,
+} from "./lifecycle.js";
 export { renderRecommendations } from "./recommendations.js";
 
-void startEspnContentLifecycle();
+void startEspnContentLifecycle().then((panel) => {
+  if (!panel) void startSleeperContentLifecycle();
+});

@@ -17,7 +17,7 @@ and consumed columns in the future dataset manifest.
 | Owner | nflverse project, publishing automated releases in [`nflverse-data`](https://github.com/nflverse/nflverse-data). |
 | Exact retrieval interface | [`nflreadpy` load functions](https://nflreadpy.nflverse.com/api/load_functions/): `load_pbp`, `load_player_stats`, `load_team_stats`, `load_rosters`, `load_players`, `load_snap_counts`, and `load_depth_charts`. The resolved `nflverse-data` release URL is recorded by the future source manifest rather than hard-coded. |
 | Intended inputs | 2022–2025 regular-season play-by-play/player-week/team-week statistics, rosters, player identity attributes, snap counts, and dated depth-chart state. |
-| Consumed fields/downstream products | Stable player identifiers/attributes feed the identity crosswalk; player/week usage, opportunity, efficiency, and availability feed semantic features; roster/depth information informs season-state features. For K, play-by-play supplies kicker identity plus field-goal and extra-point attempts/results. For DEF, play-by-play/team-week data supplies exact team, sacks, takeaways, touchdowns, and points/yards allowed. Raw source column names do not cross the data boundary. |
+| Consumed fields/downstream products | Stable player identifiers/attributes, including `gsis_id` and `espn_id` where present, feed the identity crosswalk; player/week usage, opportunity, efficiency, and availability feed semantic features; roster/depth information informs season-state features. For K, play-by-play supplies kicker identity plus field-goal and extra-point attempts/results. For DEF, play-by-play/team-week data supplies exact team, sacks, takeaways, touchdowns, and points/yards allowed. Raw source column names do not cross the data boundary. |
 | Credentials/retrieval method | No project credential; use the package's documented public downloader. Cache and raw snapshots remain local under `data/`. |
 | Freshness | Historical seasons are immutable enough to refresh only for corrections. Player statistics are normally updated nightly after game days; rosters daily at 07:00 UTC; depth charts daily at 07:00 UTC with timestamped updates from 2025. Fetch status is checked from the [nflverse automation schedule](https://nflreadr.nflverse.com/articles/nflverse_data_schedule.html). |
 | Coverage/gaps | Player statistics and rosters support the initial period. Do not assume participation or injury coverage: participation after 2023 is post-season only, and the documented injury feed has no 2025 data. Missing source fields remain missing/uncertain; they are never fabricated. |
@@ -33,16 +33,16 @@ and consumed columns in the future dataset manifest.
 | Credentials/retrieval | No credential, endpoint, scrape, captured response, ranking, ADP, or projection from FantasyPros may be added to source, fixtures, datasets, or runtime requests. The deferred FantasyPros browser surface is not evaluated here. |
 | Freshness/failure | No polling or cache is permitted. Its absence is not interpreted as a zero market score. |
 
-## Approved for discovery only: Sleeper read-only live-draft API
+## Approved for discovery and local identity mapping: Sleeper read-only API
 
 | Metadata | Decision |
 |---|---|
 | Owner and interface | Sleeper, [Sleeper API](https://docs.sleeper.com/), read through an extension service-worker adapter rather than the backend. |
-| Permitted scope | Authorized private, non-commercial mock-draft discovery only. This approval does not add a production runtime request or authorize collecting credentials, cookies, invite URLs, or real league payloads. |
-| Intended facts | Draft identity/type/order, user-to-roster/slot evidence, league configuration, ordered picks, provider individual-player and team-defense IDs, and API failure/rate-limit behavior. |
-| Credentials and retention | The documented API is read-only and does not require an API token. Browser authentication material is never extracted or retained. Sanitized fixtures contain synthetic or redacted identifiers only; raw captures remain local. |
+| Permitted scope | Authorized private, non-commercial mock-draft discovery and the local, once-daily player-catalog snapshot required to build a versioned identity crosswalk. This approval does not add a draft-observation runtime request or authorize collecting credentials, browser-authentication material, invite URLs, or real league payloads. |
+| Intended facts | Draft identity/type/order, user-to-roster/slot evidence, league configuration, ordered picks, provider individual-player and team-defense IDs, API failure/rate-limit behavior, and exact catalog fields needed for provider-to-internal identity mapping. |
+| Credentials and retention | The documented API is read-only and does not require an API token. Browser authentication material is never extracted or retained. The public player-catalog response is a local raw source snapshot with a manifest/checksum and is never committed; sanitized fixtures contain synthetic or redacted identifiers only. |
 | Identity and data use | Provider individual-player and team-defense IDs feed only the provider-to-internal identity validation path. They are not approved as a historical, market, or projection input. |
-| Required promotion evidence | Re-review current terms and rate guidance, exact endpoints/fields, supported draft semantics, complete-snapshot behavior, mapping coverage, polling/backoff policy, and manifest permissions before enabling runtime use. |
+| Required promotion evidence | Re-review current terms and rate guidance, exact endpoints/fields, supported draft semantics, complete-snapshot behavior, mapping coverage, polling/backoff policy, adapter host permissions, and manifest permissions before enabling runtime draft observation. |
 | Failure behavior | API unavailability, malformed data, throttling, incomplete snapshots, or unresolved identity leave recommendations non-current; the adapter must not infer state from a partial page. |
 
 ## Market-prior fallback

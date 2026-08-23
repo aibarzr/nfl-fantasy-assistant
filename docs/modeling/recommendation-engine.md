@@ -15,9 +15,12 @@ Historical features influence projection and must not be added again directly to
 Start with deterministic position-specific weighted models over prepared semantic features. QB
 explicitly models rushing; RB receiving involvement responds to PPR; WR prioritizes target/air-yard
 opportunity; TE includes receiving role and later positional advantage. K uses documented kicking
-opportunity and conversion inputs; `DEF` uses documented team-defense scoring inputs. K is projected
-as an individual player and `DEF` as a team asset. Neither model may be enabled until its source
-coverage, scoring semantics, confidence behavior, and validation segment are versioned.
+opportunity and conversion inputs; `DEF` uses documented team-defense scoring inputs. When a
+league enables field-goal distance/miss bands or points-allowed bands, projection applies their
+published per-game/rate features directly and rejects incomplete band coverage rather than
+substituting a flat rule. K is projected as an individual player and `DEF` as a team asset. Neither
+model may be enabled until its source coverage, scoring semantics, confidence behavior, and
+validation segment are versioned.
 Availability, role stability, high-value usage, and efficiency remain distinct explainable inputs.
 
 Rookies follow a separate projector because missing NFL history is not negative evidence. The initial configurable prior is 50% ECR, 25% draft capital, 15% expected role/depth chart, and 10% athletic profile. NCAA production remains deferred.

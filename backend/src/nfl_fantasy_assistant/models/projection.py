@@ -11,6 +11,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from nfl_fantasy_assistant.domain.scoring import (
+    DEFENSIVE_POINTS_ALLOWED_BANDS,
+    FIELD_GOAL_MADE_BANDS,
+    FIELD_GOAL_MISSED_BANDS,
+    validate_scoring_rules,
+)
+
 SUPPORTED_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 
 
@@ -42,10 +49,32 @@ class ProjectionFeatures:
     kicking_attempts_per_game: float | None = None
     kicking_conversion_rate: float | None = None
     extra_point_attempts_per_game: float | None = None
+    extra_points_made_per_game: float | None = None
+    extra_points_missed_per_game: float | None = None
+    field_goals_made_0_19_per_game: float | None = None
+    field_goals_made_20_29_per_game: float | None = None
+    field_goals_made_30_39_per_game: float | None = None
+    field_goals_made_40_49_per_game: float | None = None
+    field_goals_made_50_plus_per_game: float | None = None
+    field_goals_missed_0_19_per_game: float | None = None
+    field_goals_missed_20_29_per_game: float | None = None
+    field_goals_missed_30_39_per_game: float | None = None
+    field_goals_missed_40_49_per_game: float | None = None
+    field_goals_missed_50_plus_per_game: float | None = None
     defensive_sacks_per_game: float | None = None
+    defensive_interceptions_per_game: float | None = None
+    defensive_fumble_recoveries_per_game: float | None = None
+    defensive_safeties_per_game: float | None = None
     turnovers_forced_per_game: float | None = None
     points_allowed_per_game: float | None = None
     defensive_touchdowns_per_game: float | None = None
+    defensive_points_allowed_0_rate: float | None = None
+    defensive_points_allowed_1_6_rate: float | None = None
+    defensive_points_allowed_7_13_rate: float | None = None
+    defensive_points_allowed_14_20_rate: float | None = None
+    defensive_points_allowed_21_27_rate: float | None = None
+    defensive_points_allowed_28_34_rate: float | None = None
+    defensive_points_allowed_35_plus_rate: float | None = None
     source_updated_at: datetime | None = None
 
     def normalized(self) -> dict[str, float | None]:
@@ -127,8 +156,8 @@ class ProjectionInput:
 class ProjectionParameters:
     """All deterministic feature/scoring weights, with a reproducibility version."""
 
-    model_version: str = "projection-v2"
-    normalization_version: str = "semantic-v2"
+    model_version: str = "projection-v3"
+    normalization_version: str = "semantic-v3"
     stale_after_days: int = 14
     position_weights: Mapping[str, Mapping[str, float]] = field(
         default_factory=lambda: {
@@ -227,7 +256,47 @@ class PlayerProjection:
     normalization_version: str
 
 
-def _scoring_adjustment(position: str, scoring_rules: Mapping[str, float]) -> float:
+def _banded_scoring_component(
+    scoring_rules: Mapping[str, float],
+    features: ProjectionFeatures,
+    rules: frozenset[str],
+    feature_suffix: str,
+) -> float:
+    """Score exact band semantics only when every required historical rate is available."""
+    enabled = sorted(rule for rule in rules if rule in scoring_rules)
+    if not enabled:
+        return 0.0
+    rates = {rule: getattr(features, f"{rule}_{feature_suffix}") for rule in rules}
+    missing = sorted(rule for rule in enabled if rates[rule] is None)
+    if missing:
+        raise ProjectionError(
+            "banded scoring requires complete curated feature coverage: " + ", ".join(missing)
+        )
+    return sum(float(scoring_rules[rule]) * float(rates[rule]) for rule in enabled)
+
+
+def _feature_scoring_component(
+    scoring_rules: Mapping[str, float],
+    features: ProjectionFeatures,
+    rule_features: Mapping[str, str],
+) -> float:
+    """Apply an enabled rule to its explicit historical rate, never an implicit proxy."""
+    component = 0.0
+    for rule, feature_name in rule_features.items():
+        if rule not in scoring_rules:
+            continue
+        value = getattr(features, feature_name)
+        if value is None:
+            raise ProjectionError(
+                f"{rule} scoring requires curated feature coverage: {feature_name}"
+            )
+        component += float(scoring_rules[rule]) * value
+    return component
+
+
+def _scoring_adjustment(
+    position: str, scoring_rules: Mapping[str, float], features: ProjectionFeatures
+) -> float:
     """Represent the documented scoring sensitivity using explicit representative stat lines."""
     reception = float(scoring_rules.get("receptions", 0.0))
     rushing = float(scoring_rules.get("rushing_yards", 0.0)) * 10
@@ -240,20 +309,70 @@ def _scoring_adjustment(position: str, scoring_rules: Mapping[str, float]) -> fl
     if position == "RB":
         return (reception * 4 + rushing) / 16.0
     if position == "K":
+        made = _banded_scoring_component(scoring_rules, features, FIELD_GOAL_MADE_BANDS, "per_game")
+        missed = _banded_scoring_component(
+            scoring_rules, features, FIELD_GOAL_MISSED_BANDS, "per_game"
+        )
+        flat_made = 0.0
+        if "field_goals_made" in scoring_rules:
+            if (
+                features.kicking_attempts_per_game is None
+                or features.kicking_conversion_rate is None
+            ):
+                raise ProjectionError(
+                    "field_goals_made scoring requires kicking attempt and conversion coverage"
+                )
+            flat_made = (
+                float(scoring_rules["field_goals_made"])
+                * features.kicking_attempts_per_game
+                * features.kicking_conversion_rate
+            )
+        flat_missed = 0.0
+        if "field_goals_missed" in scoring_rules:
+            if (
+                features.kicking_attempts_per_game is None
+                or features.kicking_conversion_rate is None
+            ):
+                raise ProjectionError(
+                    "field_goals_missed scoring requires kicking attempt and conversion coverage"
+                )
+            flat_missed = (
+                float(scoring_rules["field_goals_missed"])
+                * features.kicking_attempts_per_game
+                * (1.0 - features.kicking_conversion_rate)
+            )
         return (
-            float(scoring_rules.get("field_goals_made", 0.0)) * 2.0
-            + float(scoring_rules.get("field_goals_missed", 0.0)) * 0.5
-            + float(scoring_rules.get("extra_points_made", 0.0)) * 3.0
-            + float(scoring_rules.get("extra_points_missed", 0.0)) * 0.1
+            made
+            + missed
+            + flat_made
+            + flat_missed
+            + _feature_scoring_component(
+                scoring_rules,
+                features,
+                {
+                    "extra_points_made": "extra_points_made_per_game",
+                    "extra_points_missed": "extra_points_missed_per_game",
+                },
+            )
         ) / 4.0
     if position == "DEF":
+        points_allowed = _banded_scoring_component(
+            scoring_rules, features, DEFENSIVE_POINTS_ALLOWED_BANDS, "rate"
+        )
         return (
-            float(scoring_rules.get("defensive_sacks", 0.0)) * 3.0
-            + float(scoring_rules.get("defensive_interceptions", 0.0)) * 1.0
-            + float(scoring_rules.get("defensive_fumble_recoveries", 0.0)) * 1.0
-            + float(scoring_rules.get("defensive_touchdowns", 0.0)) * 0.1
-            + float(scoring_rules.get("defensive_safeties", 0.0)) * 0.05
+            _feature_scoring_component(
+                scoring_rules,
+                features,
+                {
+                    "defensive_sacks": "defensive_sacks_per_game",
+                    "defensive_interceptions": "defensive_interceptions_per_game",
+                    "defensive_fumble_recoveries": "defensive_fumble_recoveries_per_game",
+                    "defensive_touchdowns": "defensive_touchdowns_per_game",
+                    "defensive_safeties": "defensive_safeties_per_game",
+                },
+            )
             + float(scoring_rules.get("defensive_blocked_kicks", 0.0)) * 0.1
+            + points_allowed
             + float(scoring_rules.get("points_allowed", 0.0)) * 18.0
             + float(scoring_rules.get("yards_allowed", 0.0)) * 300.0
         ) / 8.0
@@ -284,6 +403,7 @@ def project_player(
     calculation_time = now or datetime.now(UTC)
     if calculation_time.tzinfo is None:
         raise ProjectionError("projection calculation timestamp must include a timezone")
+    validate_scoring_rules(scoring_rules)
     normalized = player.features.normalized()
     warnings: tuple[str, ...]
     freshness, warnings = _freshness(player.features, active_parameters, calculation_time)
@@ -308,7 +428,7 @@ def project_player(
         confidence = 0.35 + 0.55 * (
             present / len(active_parameters.position_weights[player.position])
         )
-    scoring = _scoring_adjustment(player.position, scoring_rules)
+    scoring = _scoring_adjustment(player.position, scoring_rules, player.features)
     components["scoring_adjustment"] = scoring / 10.0
     expected = round((7.0 + 18.0 * base + scoring) * freshness, 3)
     confidence = round(_clamp(confidence * freshness), 3)

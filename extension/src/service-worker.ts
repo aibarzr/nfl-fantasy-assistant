@@ -7,6 +7,8 @@ import {
 } from "./api/client.js";
 import type { components } from "./api/generated-contract.js";
 import { loadPairedBackendConfiguration } from "./config/pairing.js";
+import { fetchSleeperRecoverySnapshot } from "./adapters/sleeper/api.js";
+import type { SleeperRecoveryResult } from "./adapters/sleeper/recovery-snapshot.js";
 
 type DiagnosticsResponse = components["schemas"]["DiagnosticsResponse"];
 type DraftStateResponse = components["schemas"]["DraftStateResponse"];
@@ -51,6 +53,12 @@ export type WorkerRequest =
       operation: "reconcile_snapshot";
       draftId: string;
       request: SnapshotRequest;
+    }
+  | {
+      type: "nfl_fantasy_assistant_backend";
+      operation: "sleeper_recovery";
+      pageUrl: string;
+      observedAt: string;
     };
 
 type WorkerSuccess =
@@ -62,8 +70,13 @@ type WorkerSuccess =
   | SnapshotResponse
   | RecommendationResponse;
 
+type SleeperRecoveryResponse = Extract<
+  SleeperRecoveryResult,
+  { status: "ready" }
+>;
+
 export type WorkerResponse =
-  | { ok: true; data: WorkerSuccess }
+  | { ok: true; data: WorkerSuccess | SleeperRecoveryResponse }
   | {
       ok: false;
       error: {
@@ -82,11 +95,17 @@ export type WorkerResponse =
 export interface WorkerDependencies {
   loadConfiguration(): Promise<BackendConfiguration>;
   createClient(configuration: BackendConfiguration): BackendApiClient;
+  fetchSleeperRecovery?(
+    pageUrl: string,
+    observedAt: string,
+  ): Promise<SleeperRecoveryResult>;
 }
 
 const dependencies: WorkerDependencies = {
   loadConfiguration: loadPairedBackendConfiguration,
   createClient: (configuration) => new BackendApiClient({ configuration }),
+  fetchSleeperRecovery: (pageUrl, observedAt) =>
+    fetchSleeperRecoverySnapshot(pageUrl, observedAt),
 };
 
 function isWorkerRequest(value: unknown): value is WorkerRequest {
@@ -131,6 +150,23 @@ export async function handleWorkerRequest(
   injected: WorkerDependencies = dependencies,
 ): Promise<WorkerResponse> {
   try {
+    if (request.operation === "sleeper_recovery") {
+      await injected.loadConfiguration();
+      const recovery = await (
+        injected.fetchSleeperRecovery ?? fetchSleeperRecoverySnapshot
+      )(request.pageUrl, request.observedAt);
+      if (recovery.status !== "ready") {
+        return {
+          ok: false,
+          error: {
+            kind: "validation",
+            message: recovery.detail,
+            retryable: false,
+          },
+        };
+      }
+      return { ok: true, data: recovery };
+    }
     const client = injected.createClient(await injected.loadConfiguration());
     switch (request.operation) {
       case "health":

@@ -166,15 +166,15 @@ class DraftCreateRequest(ProtocolModel):
 class EventRequest(ProtocolModel):
     event_id: str = Field(min_length=1, max_length=MAX_TEXT_LENGTH)
     observed_at: datetime
-    surface: Literal["espn", "fantasypros"]
-    league_provider: Literal["espn"]
+    surface: Literal["espn", "sleeper", "fantasypros"]
+    league_provider: Literal["espn", "sleeper"]
     type: Literal["player_drafted"]
     pick: ObservedPickInput
     protocol_version: Literal["v1"] = "v1"
 
 
 class SnapshotRequest(ProtocolModel):
-    source: Literal["espn", "fantasypros"]
+    source: Literal["espn", "sleeper_api", "fantasypros"]
     observed_at: datetime
     declared_complete: bool
     picks: list[ObservedPickInput] = Field(max_length=MAX_OBSERVATIONS)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 describe("extension manifest", () => {
-  it("requests only the exact ESPN and loopback hosts required by the live loop", async () => {
+  it("requests only the exact provider and loopback hosts required by the live loop", async () => {
     const manifest = await import("../manifest.json", {
       with: { type: "json" },
     });
@@ -11,10 +11,17 @@ describe("extension manifest", () => {
     expect(manifest.default.host_permissions).toEqual([
       "http://127.0.0.1/*",
       "https://fantasy.espn.com/*",
+      "https://sleeper.com/*",
+      "https://api.sleeper.app/*",
     ]);
     expect(manifest.default.content_scripts).toEqual([
       {
         matches: ["https://fantasy.espn.com/football/draft*"],
+        js: ["content/index.js"],
+        run_at: "document_idle",
+      },
+      {
+        matches: ["https://sleeper.com/draft/nfl/*"],
         js: ["content/index.js"],
         run_at: "document_idle",
       },

@@ -34,6 +34,8 @@ other than the configured extension origin.
 - League format and user draft slot match the platform.
 - Every configured position, including K and DEF where present, has a supported identity route,
   prepared-value coverage, and versioned scoring translation.
+- A Sleeper initialization configuration contains only the validated neutral roster/scoring form;
+  any unsupported provider roster or enabled scoring token leaves readiness unavailable.
 - Dataset and market-source timestamps meet configured freshness policy.
 - Model/data versions are pinned for the session.
 - Initial snapshot pick count, order, rosters, and unresolved-player count are visible.

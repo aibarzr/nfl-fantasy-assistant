@@ -22,14 +22,13 @@ older result as current.
 
 ## Approved provider expansion
 
-Sleeper is an approved second league provider, but it is not yet accepted by the implemented v1
-OpenAPI. The Sleeper discovery and implementation tickets must extend the authoritative FastAPI
-models, regenerate OpenAPI and the TypeScript consumer, and add compatibility tests together.
-Until then, the current generated contract correctly rejects Sleeper event and snapshot values.
+Sleeper is an approved second league provider. The v1 OpenAPI accepts `sleeper` as a league
+provider and browser surface, and `sleeper_api` as its documented complete-snapshot source. The
+extension may submit these only after exact surface activation, validated local configuration, and
+the provider-specific identity/prepared-pool gate. FastAPI models and their generated TypeScript
+consumer remain authoritative for the exact values.
 
-The intended additive v1 change is to accept `sleeper` as a league provider and browser surface,
-a precise structured snapshot source such as `sleeper_api`, and the MVP draft positions `K` and
-`DEF`. `DEF` denotes a team-defense asset, not a player-name alias. Exact enum names and validation
+`DEF` denotes a team-defense asset, not a player-name alias. Exact enum names and validation
 limits remain owned by the generated OpenAPI rather than this prose.
 
 ## Common rules
@@ -100,6 +99,11 @@ returns a stable unavailable/unsupported outcome rather than guessing. Raw provi
 scoring codes must be translated through a versioned adapter codebook before they are presented as
 semantic league configuration. Partial snapshots may diagnose or append evidence but cannot prove
 that accepted state should be deleted.
+
+The Sleeper initialization boundary validates its documented eight-team snake league shape,
+provider roster-position tokens, and every enabled provider scoring token before producing a
+`LeagueConfigInput`. Its output contains only neutral slot eligibility and semantic scoring keys;
+an unmapped roster or scoring token returns an unavailable result and cannot initialize a session.
 
 For Sleeper, a documented API response can be a complete snapshot only after the adapter validates
 its draft identity, ordering, and declared-completeness semantics against sanitized discovery

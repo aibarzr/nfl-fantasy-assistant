@@ -59,6 +59,8 @@ The exact schemas will be versioned with implementation, but the initial semanti
 
 - `draftable_assets`: internal identity, asset type, and stable player or team-defense attributes.
 - `asset_external_ids`: provider, external ID, internal asset ID, resolution method, provenance, validity/conflict state.
+- `sleeper_crosswalk_coverage`: provider/season/position totals plus resolved and blocked counts
+  for the catalog and the prepared pool; it is emitted only with a validated Sleeper crosswalk.
 - `player_week_features`: one player/season/week with usage, opportunity, efficiency, role, and availability measures.
 - `market_rankings`: player, format, rank/ADP, uncertainty/range, source and timestamp.
 - `player_projections`: player, league/scoring context class, expected/floor/ceiling/confidence, model and feature versions.
@@ -75,13 +77,42 @@ coverage. Kicker is an individual-player asset. Team defense is a distinct draft
 an exact provider identity and authoritative NFL-team/season provenance; it must not be fabricated
 as a player or mapped by a team display name.
 
+The curated nflverse player identity record retains both its exact `gsis_id` and `espn_id` where
+available. A provider crosswalk may use either exact identifier only with matching position and NFL
+team corroboration; if multiple supplied identifiers disagree, if one supplied identifier is
+unknown, or if either identity is absent, the result remains unresolved or conflict. These fields
+are identity evidence, never display-name matching inputs.
+
 Sleeper player IDs and Sleeper team-defense IDs require their own versioned mapping evidence and
 coverage checks. A Sleeper ID must never be equated with another provider's numeric ID, and player
 name, NFL team, and position remain corroborating attributes rather than a primary identity.
 
 Controlled fallback normalization may handle suffixes, apostrophes, hyphens, abbreviations, team changes, rookies, and duplicate names. It produces candidates, not automatic truth. Auto-resolution requires a single corroborated candidate under versioned rules; otherwise record `unresolved` or `conflict` and preserve the original reference.
 
-Manual overrides must be explicit rows with reason, provenance, timestamp, and supersession history. Never silently rewrite a mapping already used by an accepted draft event.
+Manual overrides must be explicit rows with reason, provenance, timestamp, and supersession history. Never silently rewrite a mapping already used by an accepted draft event. A local review tool may offer a batch only for still-pending, one-to-one candidates generated from exact display name, position, and NFL team evidence and with no supplied GSIS or ESPN value. It must show the count first and require an explicit confirmation; entries with an authoritative identifier, duplicate candidate, conflict, or team-defense evidence remain individual review work.
+
+A completed local Sleeper crosswalk must pin the catalog manifest plus checksums of the curated
+player artifact, reviewed queue, and review decisions. It accepts reviewed entries only when they
+target the exact queued internal ID and do not contradict an exact catalog mapping or catalog
+identity conflict. The resulting report remains local until the explicit publication step creates a
+new immutable dataset version: it re-pins `prepared.parquet` to that new version and writes the
+resolved `asset_external_ids.parquet` table plus `sleeper_crosswalk_coverage.parquet`. An existing
+dataset version is never altered.
+
+Before a Sleeper draft can initialize, the report must also pin and validate the exact typed
+`prepared.parquet` output from one immutable published dataset-version directory. Its declared
+checksum, row count, and every row's dataset/feature versions must agree with that dataset's
+manifest. Every internal asset in that pool must have a Sleeper mapping; an unmapped asset aborts
+publication rather than being omitted or guessed.
+
+When a verified current Sleeper catalog and a season-state roster source disagree on an individual
+player's team, the mapping remains blocked unless a reviewer records an explicit, timestamped team
+transition override naming both teams and the reason. This override is unavailable for DEF and
+never updates historical observations or silently replaces the conflicting evidence.
+
+For a current-season Sleeper catalog, exact provider NFL team codes may create only structural,
+season-valid DEF identities. They carry no fabricated statistics, features, projection, or value:
+those remain dependent on the approved PBP preparation path.
 
 ## Feature foundation
 
@@ -94,11 +125,12 @@ QB/RB/WR/TE feature is silently repurposed as a K/DEF proxy.
 Derive higher-level versioned features such as usage, opportunity, efficiency, high-value usage, receiving/rushing role, role stability, and availability. Position-specific projection code consumes these stable features.
 
 For K, regular-season nflverse play-by-play is transformed through the authoritative kicker ID
-into field-goal/extra-point attempts and conversion measures. For DEF, the transform produces a
-stable team asset with NFL-team and season-validity provenance plus sacks, takeaways, defensive
-touchdowns, points allowed, and pass/rush yards allowed. The transform rejects incomplete game
-identity/score evidence and excludes postseason rows; source names and raw columns do not cross
-the curated boundary.
+into field-goal/extra-point attempts, made/missed extra-point counts, conversion measures, and
+versioned made/missed distance-band counts. For DEF, the transform produces a stable team asset with NFL-team and
+season-validity provenance plus sacks, takeaways, defensive touchdowns, safeties, points allowed,
+points-allowed band indicators, and pass/rush yards allowed. The transform rejects incomplete
+game identity/score evidence, unknown field-goal outcomes or distances, and excludes postseason
+rows; source names and raw columns do not cross the curated boundary.
 
 ## Quality gates
 

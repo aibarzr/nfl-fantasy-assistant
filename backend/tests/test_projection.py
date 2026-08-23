@@ -52,7 +52,7 @@ def test_position_projectors_are_deterministic_and_position_specific(position: s
     )
     assert projection == replay
     assert projection.floor_points < projection.expected_points < projection.ceiling_points
-    assert projection.model_version == "projection-v2"
+    assert projection.model_version == "projection-v3"
     if position == "QB":
         assert "rushing_role" in projection.components
     if position in {"RB", "WR", "TE"}:
@@ -124,6 +124,88 @@ def test_kicker_and_defense_scoring_are_explicit_and_position_specific() -> None
     scored_defense = project_player(defense, {"defensive_sacks": 1.0}, now=NOW)
     assert scored_kicker.expected_points > project_player(kicker, {}, now=NOW).expected_points
     assert scored_defense.expected_points > project_player(defense, {}, now=NOW).expected_points
+
+
+def test_banded_kicker_and_defense_scoring_uses_curated_rates_or_fails_closed() -> None:
+    kicker = ProjectionInput(
+        "banded-kicker",
+        "K",
+        features(
+            field_goals_made_0_19_per_game=0.5,
+            field_goals_made_20_29_per_game=0.5,
+            field_goals_made_30_39_per_game=0.5,
+            field_goals_made_40_49_per_game=0.5,
+            field_goals_made_50_plus_per_game=1.0,
+            field_goals_missed_0_19_per_game=0.25,
+            field_goals_missed_20_29_per_game=0.0,
+            field_goals_missed_30_39_per_game=0.25,
+            extra_points_made_per_game=2.0,
+            extra_points_missed_per_game=0.25,
+        ),
+    )
+    scoring = {
+        "field_goals_made_0_19": 3.0,
+        "field_goals_made_20_29": 3.0,
+        "field_goals_made_30_39": 3.0,
+        "field_goals_made_40_49": 3.0,
+        "field_goals_made_50_plus": 5.0,
+        "field_goals_missed_0_19": -1.0,
+        "field_goals_missed_20_29": -1.0,
+        "field_goals_missed_30_39": -1.0,
+        "extra_points_made": 1.0,
+        "extra_points_missed": -1.5,
+    }
+    scored = project_player(kicker, scoring, now=NOW)
+    assert scored.expected_points > project_player(kicker, {}, now=NOW).expected_points
+    with pytest.raises(ProjectionError, match="complete curated feature coverage"):
+        project_player(
+            ProjectionInput("missing-band", "K", features()),
+            {"field_goals_made_50_plus": 5.0},
+            now=NOW,
+        )
+
+    defense = ProjectionInput(
+        "banded-defense",
+        "DEF",
+        features(
+            defensive_sacks_per_game=2.0,
+            defensive_interceptions_per_game=1.0,
+            defensive_fumble_recoveries_per_game=0.5,
+            defensive_touchdowns_per_game=0.25,
+            defensive_safeties_per_game=0.25,
+            defensive_points_allowed_0_rate=0.25,
+            defensive_points_allowed_1_6_rate=0.25,
+            defensive_points_allowed_7_13_rate=0.25,
+            defensive_points_allowed_14_20_rate=0.25,
+            defensive_points_allowed_21_27_rate=0.0,
+            defensive_points_allowed_28_34_rate=0.0,
+            defensive_points_allowed_35_plus_rate=0.0,
+        ),
+    )
+    defense_scoring = {
+        "defensive_sacks": 1.0,
+        "defensive_interceptions": 2.0,
+        "defensive_fumble_recoveries": 2.0,
+        "defensive_touchdowns": 6.0,
+        "defensive_safeties": 2.0,
+        "defensive_points_allowed_0": 10.0,
+        "defensive_points_allowed_1_6": 7.0,
+        "defensive_points_allowed_7_13": 4.0,
+        "defensive_points_allowed_14_20": 1.0,
+        "defensive_points_allowed_21_27": 0.0,
+        "defensive_points_allowed_28_34": -1.0,
+        "defensive_points_allowed_35_plus": -4.0,
+    }
+    assert (
+        project_player(defense, defense_scoring, now=NOW).expected_points
+        > project_player(defense, {}, now=NOW).expected_points
+    )
+    with pytest.raises(ProjectionError, match="complete curated feature coverage"):
+        project_player(
+            ProjectionInput("missing-points-band", "DEF", features()),
+            {"defensive_points_allowed_0": 10.0},
+            now=NOW,
+        )
 
 
 def test_parameter_validation_and_timezone_requirements_are_visible() -> None:

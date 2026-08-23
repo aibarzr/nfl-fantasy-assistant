@@ -22,17 +22,25 @@ from nfl_fantasy_assistant.data.identity import (
     IdentityPipeline,
     ManualOverride,
     Resolution,
+    internal_player_id,
     normalize_name,
 )
 from nfl_fantasy_assistant.data.ingestion import (
     RetrievedSource,
+    SleeperCatalogFetcher,
     SnapshotIngestor,
     SourceSpec,
 )
-from nfl_fantasy_assistant.data.k_def import transform_pbp_k_def
+from nfl_fantasy_assistant.data.k_def import (
+    build_season_team_defense_assets,
+    transform_pbp_k_def,
+)
 from nfl_fantasy_assistant.data.preparation import (
     LeaguePreparationContext,
+    PreparedPlayer,
     prepare_baseline_pool,
+    read_prepared_parquet,
+    read_published_prepared_pool,
     score_stat_line,
     write_prepared_parquet,
 )
@@ -41,6 +49,27 @@ from nfl_fantasy_assistant.data.publishing import (
     OutputFile,
     PinnedDataset,
     dataset_manifest,
+)
+from nfl_fantasy_assistant.data.sleeper_identity import (
+    SleeperCatalogRecord,
+    SleeperReviewDecision,
+    SleeperTeamTransitionReview,
+    approve_sleeper_review_decisions,
+    approve_sleeper_team_transition_reviews,
+    build_approved_sleeper_crosswalk,
+    build_sleeper_crosswalk,
+    parse_sleeper_catalog,
+    propose_sleeper_review_candidates,
+    publish_sleeper_crosswalk_dataset,
+    require_sleeper_coverage,
+    require_sleeper_prepared_pool_coverage,
+    write_sleeper_crosswalk_report,
+    write_sleeper_review_queue,
+)
+from nfl_fantasy_assistant.data.sleeper_review import (
+    batch_review_candidates,
+    load_review_queue_artifact,
+    validate_decisions_against_queue,
 )
 
 
@@ -115,6 +144,34 @@ def test_ingestion_is_idempotent_and_does_not_publish_failed_download(tmp_path: 
         if (tmp_path / "raw" / "nflverse" / "2024").exists()
         else True
     )
+
+
+def test_sleeper_catalog_fetcher_uses_documented_local_json_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Response:
+        headers = {"etag": "fixture-etag"}
+
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        @staticmethod
+        def read() -> bytes:
+            return b'{"fixture":{"player_id":"fixture","position":"QB"}}'
+
+    monkeypatch.setattr(
+        "nfl_fantasy_assistant.data.ingestion.urlopen", lambda *_args, **_kwargs: Response()
+    )
+    ingestor = SnapshotIngestor(tmp_path / "raw", tmp_path / "cache")
+    manifest = ingestor.ingest(
+        SourceSpec("sleeper", 2026, "players", "Sleeper non-commercial API", ("player_id",)),
+        SleeperCatalogFetcher(),
+    )
+    assert manifest.source_version == "fixture-etag"
+    assert manifest.snapshot_file.endswith("snapshot.json")
 
 
 def test_curation_validates_and_writes_repeatable_parquet(tmp_path: Path) -> None:
@@ -202,6 +259,11 @@ def test_scoring_and_pool_reject_unsupported_or_unresolved() -> None:
     )
     with pytest.raises(DataValidationError, match="unsupported scoring"):
         score_stat_line({}, {"return_yards": 0.1})
+    with pytest.raises(DataValidationError, match="mutually exclusive"):
+        score_stat_line(
+            {"field_goals_made": 1, "field_goals_made_50_plus": 1},
+            {"field_goals_made": 3, "field_goals_made_50_plus": 5},
+        )
     resolved = IdentityPipeline.from_players(curate_players([player_row()], "source-1")).resolve(
         ExternalReference("nflverse", "00-003")
     )
@@ -250,6 +312,23 @@ def test_kicker_and_team_defense_use_explicit_scoring_and_exact_identity() -> No
         )
         == 7
     )
+    assert (
+        score_stat_line(
+            {
+                "field_goals_made_0_19": 1,
+                "field_goals_made_50_plus": 1,
+                "field_goals_missed_30_39": 1,
+                "defensive_points_allowed_0": 1,
+            },
+            {
+                "field_goals_made_0_19": 3,
+                "field_goals_made_50_plus": 5,
+                "field_goals_missed_30_39": -1,
+                "defensive_points_allowed_0": 10,
+            },
+        )
+        == 17
+    )
     defense = curate_players(
         [
             player_row(
@@ -282,6 +361,363 @@ def test_kicker_and_team_defense_use_explicit_scoring_and_exact_identity() -> No
     assert [item.position for item in pool] == ["K", "DEF"]
 
 
+def test_sleeper_crosswalk_requires_exact_identifiers_and_team_defense_validity(
+    tmp_path: Path,
+) -> None:
+    players = curate_players(
+        [
+            player_row(
+                "rb-source",
+                gsis_id="gsis-rb",
+                espn_id="espn-rb",
+                position="RB",
+                nfl_team="CHI",
+            ),
+            player_row(
+                "k-source",
+                gsis_id=None,
+                espn_id="espn-k",
+                position="K",
+                nfl_team="DET",
+            ),
+            player_row(
+                "def-source",
+                gsis_id=None,
+                espn_id=None,
+                display_name="Fixture defense",
+                position="DEF",
+                nfl_team="CHI",
+                valid_from_season=2026,
+                valid_through_season=2026,
+            ),
+            player_row(
+                "conflict-source",
+                gsis_id="gsis-conflict",
+                espn_id="espn-conflict",
+                position="WR",
+                nfl_team="CHI",
+            ),
+        ],
+        "source-1",
+    )
+    report = build_sleeper_crosswalk(
+        players,
+        [
+            SleeperCatalogRecord("sleeper-rb", "RB", "CHI", gsis_id="gsis-rb"),
+            SleeperCatalogRecord("sleeper-k", "K", "DET", espn_id="espn-k"),
+            SleeperCatalogRecord("sleeper-def", "DEF", "CHI"),
+            SleeperCatalogRecord("sleeper-missing", "WR", "CHI", gsis_id="unknown"),
+            SleeperCatalogRecord(
+                "sleeper-incomplete", "RB", "CHI", gsis_id="unknown", espn_id="espn-rb"
+            ),
+            SleeperCatalogRecord(
+                "sleeper-conflict", "RB", "CHI", gsis_id="gsis-rb", espn_id="espn-conflict"
+            ),
+        ],
+        season=2026,
+        source_manifest_id="fixture-catalog-v1",
+    )
+    assert {mapping.external_id for mapping in report.mappings} == {
+        "sleeper-rb",
+        "sleeper-k",
+        "sleeper-def",
+    }
+    assert report.unresolved_external_ids == ("sleeper-incomplete", "sleeper-missing")
+    assert report.conflict_external_ids == ("sleeper-conflict",)
+    assert report.coverage_by_position["K"] == (1, 1, 0)
+    assert report.coverage_by_position["DEF"] == (1, 1, 0)
+    first_checksum = write_sleeper_crosswalk_report(report, tmp_path / "sleeper-crosswalk.json")
+    second_checksum = write_sleeper_crosswalk_report(report, tmp_path / "sleeper-crosswalk.json")
+    persisted = (tmp_path / "sleeper-crosswalk.json").read_text(encoding="utf-8")
+    assert first_checksum == second_checksum
+    assert '"source_manifest_id":"fixture-catalog-v1"' in persisted
+    assert "display_name" not in persisted
+    pipeline = IdentityPipeline(players, mappings=report.mappings)
+    assert (
+        pipeline.resolve(ExternalReference("sleeper", "sleeper-k", position="K")).state
+        == "resolved"
+    )
+    assert (
+        pipeline.resolve(
+            ExternalReference("sleeper", "sleeper-def", position="DEF", season=2026)
+        ).state
+        == "resolved"
+    )
+    assert (
+        pipeline.resolve(
+            ExternalReference("sleeper", "sleeper-def", position="DEF", season=2027)
+        ).state
+        == "unresolved"
+    )
+    with pytest.raises(DataValidationError, match="required Sleeper"):
+        require_sleeper_coverage(report, ("sleeper-rb", "sleeper-missing"))
+    prepared = (
+        PreparedPlayer(
+            report.mappings[0].internal_player_id,
+            "RB",
+            10.0,
+            "2026-08-23T00:00:00+00:00",
+            "feature-v1",
+            "dataset-v1",
+        ),
+    )
+    covered = require_sleeper_prepared_pool_coverage(
+        report,
+        prepared,
+        prepared_pool_checksum="fixture-prepared-checksum",
+        prepared_pool_dataset_version="dataset-v1",
+        prepared_pool_feature_version="feature-v1",
+    )
+    assert covered.prepared_pool_coverage == {"RB": (1, 1, 0)}
+    write_sleeper_crosswalk_report(covered, tmp_path / "sleeper-covered-crosswalk.json")
+    covered_payload = (tmp_path / "sleeper-covered-crosswalk.json").read_text(encoding="utf-8")
+    assert '"prepared_pool_dataset_version":"dataset-v1"' in covered_payload
+    assert '"prepared_pool_feature_version":"feature-v1"' in covered_payload
+    with pytest.raises(DataValidationError, match="prepared pool"):
+        require_sleeper_prepared_pool_coverage(
+            report,
+            (
+                PreparedPlayer(
+                    "player-missing",
+                    "RB",
+                    10.0,
+                    "2026-08-23T00:00:00+00:00",
+                    "feature-v1",
+                    "dataset-v1",
+                ),
+            ),
+            prepared_pool_checksum="fixture-prepared-checksum",
+            prepared_pool_dataset_version="dataset-v1",
+            prepared_pool_feature_version="feature-v1",
+        )
+
+
+def test_season_team_defense_assets_are_identity_only_and_season_valid() -> None:
+    defenses = build_season_team_defense_assets(
+        ("CHI", "DET"),
+        season=2026,
+        source_manifest_id="sleeper-catalog-v1",
+        source_updated_at="2026-08-23T00:00:00+00:00",
+    )
+    assert [asset.source_player_id for asset in defenses] == ["defense:CHI", "defense:DET"]
+    assert all(asset.asset_type == "team_defense" for asset in defenses)
+    report = build_sleeper_crosswalk(
+        defenses,
+        [SleeperCatalogRecord("sleeper-def", "DEF", "CHI")],
+        season=2026,
+        source_manifest_id="sleeper-catalog-v1",
+    )
+    assert report.mappings[0].asset_type == "team_defense"
+    assert report.mappings[0].external_id == "sleeper-def"
+
+
+def test_sleeper_crosswalk_is_published_in_a_new_immutable_dataset_version(
+    tmp_path: Path,
+) -> None:
+    players = curate_players([player_row()], "nflverse-source-1")
+    report = build_sleeper_crosswalk(
+        players,
+        [SleeperCatalogRecord("sleeper-rb", "RB", "CHI", gsis_id="00-003")],
+        season=2026,
+        source_manifest_id="sleeper-catalog-1",
+    )
+    prepared = (
+        PreparedPlayer(
+            report.mappings[0].internal_player_id,
+            "RB",
+            10.0,
+            "2026-08-23T00:00:00+00:00",
+            "feature-v1",
+            "prepared-v1",
+        ),
+    )
+    prepared_path = tmp_path / "prepared.parquet"
+    prepared_checksum = write_prepared_parquet(prepared, prepared_path)
+    parent_manifest = dataset_manifest(
+        "prepared-v1",
+        "feature-v1",
+        "prepared-v1",
+        ("nflverse-source-1",),
+        {"prepared": "v2"},
+        (OutputFile("prepared.parquet", prepared_checksum, 1),),
+        {name: True for name in DatasetPublisher.REQUIRED_CHECKS},
+        ("CC BY 4.0",),
+    )
+    root = tmp_path / "published"
+    parent_version = DatasetPublisher(root).publish(
+        parent_manifest,
+        {"prepared.parquet": prepared_path.read_bytes()},
+        {"prepared.parquet": 1},
+    )
+    covered = require_sleeper_prepared_pool_coverage(
+        report,
+        prepared,
+        prepared_pool_checksum=prepared_checksum,
+        prepared_pool_dataset_version="prepared-v1",
+        prepared_pool_feature_version="feature-v1",
+    )
+
+    publication = publish_sleeper_crosswalk_dataset(
+        covered,
+        parent_version,
+        root,
+        dataset_version="prepared-with-sleeper-v1",
+    )
+
+    assert publication.version == root / "versions" / "prepared-with-sleeper-v1"
+    assert publication.report.prepared_pool_dataset_version == "prepared-with-sleeper-v1"
+    assert (publication.version / "asset_external_ids.parquet").is_file()
+    assert (publication.version / "sleeper_crosswalk_coverage.parquet").is_file()
+    published_pool = read_published_prepared_pool(publication.version)
+    assert published_pool.dataset_version == "prepared-with-sleeper-v1"
+    assert published_pool.players[0].dataset_version == "prepared-with-sleeper-v1"
+
+
+def test_sleeper_catalog_parser_retains_only_mapping_fields() -> None:
+    records = parse_sleeper_catalog(
+        b'{"sleeper-k":{"player_id":"sleeper-k","position":"K","team":"DET","gsis_id":null,"espn_id":"espn-k","full_name":"not-retained"}}'
+    )
+    assert records == (
+        SleeperCatalogRecord(
+            "sleeper-k", "K", "DET", display_name="not-retained", espn_id="espn-k"
+        ),
+    )
+    with pytest.raises(DataValidationError, match="key conflicts"):
+        parse_sleeper_catalog(b'{"one":{"player_id":"two","position":"QB"}}')
+
+
+def test_sleeper_review_candidates_require_explicit_approval(tmp_path: Path) -> None:
+    player = curate_players(
+        [player_row("reviewed", gsis_id=None, espn_id=None, display_name="Fixture Player")],
+        "source-1",
+    )[0]
+    record = SleeperCatalogRecord("sleeper-reviewed", "RB", "CHI", display_name="Fixture Player")
+    candidate = propose_sleeper_review_candidates([player], [record])
+    assert len(candidate) == 1
+    assert candidate[0].batch_eligible
+    assert batch_review_candidates(candidate, ()) == candidate
+    assert (
+        batch_review_candidates(
+            candidate,
+            [
+                SleeperReviewDecision(
+                    "sleeper-reviewed",
+                    candidate[0].candidate_internal_player_id,
+                    "operator",
+                    "2026-08-22T00:00:00+00:00",
+                    "Already handled",
+                )
+            ],
+        )
+        == ()
+    )
+    approved = approve_sleeper_review_decisions(
+        [player],
+        [record],
+        [
+            SleeperReviewDecision(
+                "sleeper-reviewed",
+                candidate[0].candidate_internal_player_id,
+                "operator",
+                "2026-08-22T00:00:00+00:00",
+                "Reviewed candidate evidence",
+            )
+        ],
+        season=2026,
+        source_manifest_id="fixture-catalog-v1",
+    )
+    assert approved[0].method == "sleeper_reviewed_override_v1"
+    queue_checksum = write_sleeper_review_queue(
+        candidate, tmp_path / "review-queue.json", source_manifest_id="fixture-catalog-v1"
+    )
+    assert queue_checksum
+    assert "requires_explicit_review" in (tmp_path / "review-queue.json").read_text()
+    queue = load_review_queue_artifact(tmp_path / "review-queue.json")
+    decisions = validate_decisions_against_queue(
+        queue,
+        [
+            SleeperReviewDecision(
+                "sleeper-reviewed",
+                candidate[0].candidate_internal_player_id,
+                "operator",
+                "2026-08-22T00:00:00+00:00",
+                "Reviewed candidate evidence",
+            )
+        ],
+    )
+    report = build_approved_sleeper_crosswalk(
+        [player],
+        [record],
+        decisions,
+        season=2026,
+        source_manifest_id="fixture-catalog-v1",
+        review_queue_checksum=queue.checksum,
+        review_decisions_checksum="fixture-decisions-checksum",
+        player_assets_checksum="fixture-player-assets-checksum",
+    )
+    assert report.unresolved_external_ids == ()
+    assert report.mappings[0].method == "sleeper_reviewed_override_v1"
+    assert report.review_queue_checksum == queue.checksum
+    with pytest.raises(DataValidationError, match="position or NFL team"):
+        approve_sleeper_review_decisions(
+            [player],
+            [SleeperCatalogRecord("sleeper-wrong", "WR", "CHI", display_name="Fixture Player")],
+            [
+                SleeperReviewDecision(
+                    "sleeper-wrong",
+                    candidate[0].candidate_internal_player_id,
+                    "operator",
+                    "2026-08-22T00:00:00+00:00",
+                    "Must fail",
+                )
+            ],
+            season=2026,
+            source_manifest_id="fixture-catalog-v1",
+        )
+
+
+def test_sleeper_team_transition_requires_explicit_observed_teams() -> None:
+    player = curate_players(
+        [player_row("transition", gsis_id=None, espn_id=None, position="RB", nfl_team="CHI")],
+        "source-1",
+    )[0]
+    transition = SleeperTeamTransitionReview(
+        "sleeper-transition",
+        internal_player_id(player),
+        "CHI",
+        "DET",
+        "operator",
+        "2026-08-23T00:00:00+00:00",
+        "Reviewer verified the current team transition.",
+    )
+    mappings = approve_sleeper_team_transition_reviews(
+        [player],
+        [SleeperCatalogRecord("sleeper-transition", "RB", "DET")],
+        [transition],
+        season=2026,
+        source_manifest_id="fixture-catalog-v1",
+    )
+    assert mappings[0].method == "sleeper_reviewed_team_transition_v1"
+    with pytest.raises(DataValidationError, match="observed team change"):
+        approve_sleeper_team_transition_reviews(
+            [player],
+            [SleeperCatalogRecord("sleeper-transition", "RB", "DET")],
+            [
+                SleeperTeamTransitionReview(
+                    "sleeper-transition",
+                    internal_player_id(player),
+                    "CHI",
+                    "CHI",
+                    "operator",
+                    "2026-08-23T00:00:00+00:00",
+                    "Must fail.",
+                )
+            ],
+            season=2026,
+            source_manifest_id="fixture-catalog-v1",
+        )
+
+
 def test_kicker_and_team_defense_features_are_time_safe_and_position_specific() -> None:
     kicker_features = build_semantic_features(
         curate_weeks(
@@ -292,8 +728,11 @@ def test_kicker_and_team_defense_features_are_time_safe_and_position_specific() 
                     position="K",
                     field_goal_attempts=3,
                     field_goals_made=2,
+                    field_goals_made_50_plus=1,
+                    field_goals_missed_30_39=1,
                     extra_point_attempts=2,
                     extra_points_made=2,
+                    extra_points_missed=1,
                 ),
                 week_row(
                     2,
@@ -301,8 +740,11 @@ def test_kicker_and_team_defense_features_are_time_safe_and_position_specific() 
                     position="K",
                     field_goal_attempts=4,
                     field_goals_made=4,
+                    field_goals_made_50_plus=2,
+                    field_goals_missed_30_39=0,
                     extra_point_attempts=3,
                     extra_points_made=3,
+                    extra_points_missed=0,
                 ),
             ],
             "source-k",
@@ -311,6 +753,10 @@ def test_kicker_and_team_defense_features_are_time_safe_and_position_specific() 
     assert kicker_features[0].kicking_attempts_per_game_4 is None
     assert kicker_features[1].kicking_attempts_per_game_4 == 3
     assert kicker_features[1].kicking_conversion_rate_4 == pytest.approx(2 / 3)
+    assert kicker_features[1].field_goals_made_50_plus_per_game_4 == 1
+    assert kicker_features[1].field_goals_missed_30_39_per_game_4 == 1
+    assert kicker_features[1].extra_points_missed_per_game_4 == 1
+    assert kicker_features[1].field_goals_made_0_19_per_game_4 is None
     defense_features = build_semantic_features(
         curate_weeks(
             [
@@ -377,6 +823,19 @@ def test_pbp_transform_publishes_exact_kicker_and_team_defense_assets(tmp_path: 
                 "kicker_player_name": "Kicker One",
                 "field_goal_attempt": 1,
                 "field_goal_result": "made",
+                "kick_distance": 51,
+                "total_home_score": 3,
+            },
+            {
+                **base,
+                "posteam": "CHI",
+                "defteam": "DET",
+                "play_type": "field_goal",
+                "kicker_player_id": "00-kicker",
+                "kicker_player_name": "Kicker One",
+                "field_goal_attempt": 1,
+                "field_goal_result": "missed",
+                "kick_distance": 32,
                 "total_home_score": 3,
             },
             {
@@ -392,12 +851,24 @@ def test_pbp_transform_publishes_exact_kicker_and_team_defense_assets(tmp_path: 
             },
             {
                 **base,
+                "posteam": "CHI",
+                "defteam": "DET",
+                "play_type": "extra_point",
+                "kicker_player_id": "00-kicker",
+                "kicker_player_name": "Kicker One",
+                "extra_point_attempt": 1,
+                "extra_point_result": "failed",
+                "total_home_score": 10,
+            },
+            {
+                **base,
                 "posteam": "DET",
                 "defteam": "CHI",
                 "play_type": "pass",
                 "yards_gained": 0,
                 "return_touchdown": 1,
                 "td_team": "CHI",
+                "safety": 1,
                 "total_home_score": 17,
             },
             {
@@ -421,11 +892,35 @@ def test_pbp_transform_publishes_exact_kicker_and_team_defense_assets(tmp_path: 
     assert chicago.defensive_sacks == 1
     assert chicago.defensive_interceptions == 1
     assert chicago.defensive_touchdowns == 1
+    assert chicago.defensive_safeties == 1
+    assert chicago.defensive_points_allowed_0 == 1
     assert chicago.points_allowed == 0
     assert chicago.yards_allowed == 7
     kicker = next(row for row in weeks if row.source_player_id == "00-kicker")
-    assert kicker.field_goal_attempts == 1
+    assert kicker.field_goal_attempts == 2
+    assert kicker.field_goals_missed == 1
+    assert kicker.field_goals_made_50_plus == 1
+    assert kicker.field_goals_missed_30_39 == 1
+    assert kicker.field_goals_made_0_19 == 0
+    assert kicker.field_goals_missed_50_plus == 0
     assert kicker.extra_points_made == 1
+    assert kicker.extra_points_missed == 1
+    with pytest.raises(DataValidationError, match="extra-point result"):
+        transform_pbp_k_def(
+            (
+                {
+                    **base,
+                    "posteam": "CHI",
+                    "defteam": "DET",
+                    "play_type": "extra_point",
+                    "kicker_player_id": "00-kicker",
+                    "kicker_player_name": "Kicker One",
+                    "extra_point_attempt": 1,
+                    "extra_point_result": "unknown",
+                },
+            ),
+            source_updated_at="2026-08-22T00:00:00+00:00",
+        )
     assert all(row.source_player_id != "00-postseason" for row in players)
     pipeline = IdentityPipeline.from_players(players)
     assert (
@@ -491,6 +986,7 @@ def test_pbp_transform_publishes_exact_kicker_and_team_defense_assets(tmp_path: 
     write_curated_parquet(players, PLAYER_SCHEMA, player_path)
     write_curated_parquet(weeks, WEEK_SCHEMA, week_path)
     write_prepared_parquet(prepared, prepared_path)
+    assert read_prepared_parquet(prepared_path) == tuple(prepared)
     files = {
         "players.parquet": player_path.read_bytes(),
         "weeks.parquet": week_path.read_bytes(),
@@ -520,8 +1016,100 @@ def test_pbp_transform_publishes_exact_kicker_and_team_defense_assets(tmp_path: 
         ("CC BY 4.0",),
     )
     publisher = DatasetPublisher(tmp_path / "published")
-    publisher.publish(manifest, files, row_counts)
+    version = publisher.publish(manifest, files, row_counts)
     assert publisher.active_version() == ("k-def-fixture-v1", "feature-v2")
+    published_pool = read_published_prepared_pool(version)
+    assert published_pool.players == tuple(prepared)
+    assert published_pool.dataset_version == "k-def-fixture-v1"
+    assert published_pool.feature_version == "feature-v2"
+
+
+@pytest.mark.parametrize(
+    ("distance", "result", "expected_field"),
+    (
+        (0, "made", "field_goals_made_0_19"),
+        (19, "missed", "field_goals_missed_0_19"),
+        (20, "made", "field_goals_made_20_29"),
+        (29, "missed", "field_goals_missed_20_29"),
+        (30, "made", "field_goals_made_30_39"),
+        (39, "missed", "field_goals_missed_30_39"),
+        (40, "made", "field_goals_made_40_49"),
+        (49, "missed", "field_goals_missed_40_49"),
+        (50, "made", "field_goals_made_50_plus"),
+        (63, "missed", "field_goals_missed_50_plus"),
+    ),
+)
+def test_pbp_kicker_transform_preserves_each_field_goal_band(
+    distance: int, result: str, expected_field: str
+) -> None:
+    transformed = transform_pbp_k_def(
+        (
+            {
+                "game_id": "fixture-game",
+                "home_team": "CHI",
+                "away_team": "DET",
+                "season": 2025,
+                "week": 1,
+                "total_home_score": 0,
+                "total_away_score": 0,
+                "posteam": "CHI",
+                "play_type": "field_goal",
+                "field_goal_attempt": 1,
+                "field_goal_result": result,
+                "kick_distance": distance,
+                "kicker_player_id": "fixture-kicker",
+                "kicker_player_name": "Fixture Kicker",
+            },
+        ),
+        source_updated_at="2026-08-23T00:00:00+00:00",
+    )
+    week = transformed.weeks[0]
+    assert week[expected_field] == 1
+    assert week["field_goal_attempts"] == 1
+
+
+@pytest.mark.parametrize(
+    ("points_allowed", "expected_field"),
+    (
+        (0, "defensive_points_allowed_0"),
+        (1, "defensive_points_allowed_1_6"),
+        (6, "defensive_points_allowed_1_6"),
+        (7, "defensive_points_allowed_7_13"),
+        (13, "defensive_points_allowed_7_13"),
+        (14, "defensive_points_allowed_14_20"),
+        (20, "defensive_points_allowed_14_20"),
+        (21, "defensive_points_allowed_21_27"),
+        (27, "defensive_points_allowed_21_27"),
+        (28, "defensive_points_allowed_28_34"),
+        (34, "defensive_points_allowed_28_34"),
+        (35, "defensive_points_allowed_35_plus"),
+        (52, "defensive_points_allowed_35_plus"),
+    ),
+)
+def test_pbp_defense_transform_preserves_each_points_allowed_band(
+    points_allowed: int, expected_field: str
+) -> None:
+    transformed = transform_pbp_k_def(
+        (
+            {
+                "game_id": "fixture-game",
+                "home_team": "CHI",
+                "away_team": "DET",
+                "season": 2025,
+                "week": 1,
+                "total_home_score": 0,
+                "total_away_score": points_allowed,
+                "posteam": "DET",
+                "defteam": "CHI",
+                "play_type": "pass",
+                "yards_gained": 0,
+            },
+        ),
+        source_updated_at="2026-08-23T00:00:00+00:00",
+    )
+    week = transformed.weeks[0]
+    assert week[expected_field] == 1
+    assert week["points_allowed"] == points_allowed
 
 
 def test_publication_is_atomic_and_retains_active_version(tmp_path: Path) -> None:

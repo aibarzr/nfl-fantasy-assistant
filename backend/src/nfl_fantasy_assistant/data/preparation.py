@@ -19,6 +19,7 @@ from nfl_fantasy_assistant.domain.scoring import (
 from .curation import SUPPORTED_POSITIONS
 from .errors import DataValidationError
 from .identity import Resolution
+from .publishing import DatasetManifest, read_published_dataset_manifest
 
 
 def validate_prepared_scoring_rules(scoring_rules: Mapping[str, float]) -> None:
@@ -37,6 +38,17 @@ class PreparedPlayer:
     source_updated_at: str
     feature_version: str
     dataset_version: str
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedPreparedPool:
+    """A prepared pool proven to be an output of one immutable dataset version."""
+
+    players: tuple[PreparedPlayer, ...]
+    checksum_sha256: str
+    dataset_version: str
+    feature_version: str
+    manifest: DatasetManifest
 
 
 PREPARED_SCHEMA = pa.schema(
@@ -123,3 +135,42 @@ def write_prepared_parquet(rows: Iterable[PreparedPlayer], path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     pq.write_table(table, path, compression="zstd", version="2.6")
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read_prepared_parquet(path: Path) -> tuple[PreparedPlayer, ...]:
+    """Load a published prepared-pool artifact with its typed identity boundary intact."""
+    table = pq.read_table(path)
+    if table.schema != PREPARED_SCHEMA:
+        raise DataValidationError("prepared player table does not match the required schema")
+    rows = tuple(PreparedPlayer(**row) for row in table.to_pylist())
+    if len({row.internal_player_id for row in rows}) != len(rows):
+        raise DataValidationError("prepared player table contains duplicate internal IDs")
+    return rows
+
+
+def read_published_prepared_pool(version: Path) -> PublishedPreparedPool:
+    """Read the prepared output of a checksum-verified immutable dataset version."""
+    manifest = read_published_dataset_manifest(version)
+    outputs = [output for output in manifest.outputs if output.relative_path == "prepared.parquet"]
+    if len(outputs) != 1:
+        raise DataValidationError(
+            "published dataset must declare exactly one prepared.parquet output"
+        )
+    output = outputs[0]
+    path = version / output.relative_path
+    players = read_prepared_parquet(path)
+    if len(players) != output.row_count:
+        raise DataValidationError("prepared player row count does not match dataset manifest")
+    if any(
+        player.dataset_version != manifest.dataset_version
+        or player.feature_version != manifest.feature_version
+        for player in players
+    ):
+        raise DataValidationError("prepared player versions do not match dataset manifest")
+    return PublishedPreparedPool(
+        players=players,
+        checksum_sha256=output.checksum_sha256,
+        dataset_version=manifest.dataset_version,
+        feature_version=manifest.feature_version,
+        manifest=manifest,
+    )

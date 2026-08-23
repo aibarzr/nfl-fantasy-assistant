@@ -101,3 +101,10 @@ individual-player positions; `DEF` is a team-defense asset. Flex demand is deriv
 listed eligible positions and roster slots, not a position-name heuristic. League size affects
 replacement level, scarcity, future turn distance, and positional demand; no universal
 `QB12`/`RB30` constant is a domain rule.
+
+The current neutral scoring codebook is `semantic-v3`. It represents flat or distance-banded
+field goals (made and missed) and linear or banded DEF points allowed, with each flat form mutually
+exclusive with its corresponding band family. The K bands are 0–19, 20–29, 30–39, 40–49, and 50+
+yards; DEF points-allowed bands are 0, 1–6, 7–13, 14–20, 21–27, 28–34, and 35+. Unsupported or
+conflicting enabled rules reject league initialization. Backend domain state contains only these
+neutral keys, never provider scoring codes.

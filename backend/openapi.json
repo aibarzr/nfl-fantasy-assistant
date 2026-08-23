@@ -276,7 +276,10 @@
             "type": "string"
           },
           "league_provider": {
-            "const": "espn",
+            "enum": [
+              "espn",
+              "sleeper"
+            ],
             "title": "League Provider",
             "type": "string"
           },
@@ -297,6 +300,7 @@
           "surface": {
             "enum": [
               "espn",
+              "sleeper",
               "fantasypros"
             ],
             "title": "Surface",
@@ -762,6 +766,7 @@
           "source": {
             "enum": [
               "espn",
+              "sleeper_api",
               "fantasypros"
             ],
             "title": "Source",

@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.request import urlopen
 
 import nflreadpy as nfl  # type: ignore[import-untyped]
 
@@ -36,6 +37,7 @@ class RetrievedSource:
     source_version: str
     schema: dict[str, str]
     retrieved_at: datetime
+    snapshot_suffix: str = ".parquet"
 
 
 class SourceFetcher(Protocol):
@@ -107,7 +109,7 @@ class SnapshotIngestor:
         }
         manifest_id = _sha256(_canonical_json(identity_fields))
         destination = self._raw_dir / spec.name / str(spec.season) / manifest_id
-        snapshot_file = destination / "snapshot.parquet"
+        snapshot_file = destination / f"snapshot{retrieved.snapshot_suffix}"
         manifest_file = destination / "manifest.json"
         if manifest_file.exists() and snapshot_file.exists():
             return self._read_manifest(manifest_file)
@@ -170,4 +172,40 @@ class NflreadpyFetcher:
             source_version="nflreadpy-local-resolution",
             schema=schema,
             retrieved_at=datetime.now(UTC),
+        )
+
+
+class SleeperCatalogFetcher:
+    """Local-only source fetcher for the documented daily Sleeper player catalog."""
+
+    endpoint = "https://api.sleeper.app/v1/players/nfl"
+
+    def fetch(self, spec: SourceSpec, cache_dir: Path) -> RetrievedSource:
+        if spec.name != "sleeper" or spec.dataset != "players":
+            raise DataValidationError("Sleeper fetcher only supports the player catalog")
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        with urlopen(self.endpoint, timeout=30) as response:  # noqa: S310 - fixed documented URL
+            payload = response.read()
+            source_version = response.headers.get("etag") or response.headers.get(
+                "last-modified", "sleeper-api-v1"
+            )
+        try:
+            catalog = json.loads(payload)
+        except json.JSONDecodeError as error:
+            raise DataValidationError("Sleeper catalog response must be JSON") from error
+        if not isinstance(catalog, dict):
+            raise DataValidationError("Sleeper catalog response must be an object")
+        return RetrievedSource(
+            payload=payload,
+            resolved_url=self.endpoint,
+            source_version=source_version,
+            schema={
+                "player_id": "string",
+                "position": "string",
+                "team": "string|null",
+                "gsis_id": "string|null",
+                "espn_id": "string|null",
+            },
+            retrieved_at=datetime.now(UTC),
+            snapshot_suffix=".json",
         )

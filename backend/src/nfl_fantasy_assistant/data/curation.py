@@ -14,7 +14,7 @@ import pyarrow.parquet as pq  # type: ignore[import-untyped]
 
 from .errors import DataValidationError
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "4"
 SUPPORTED_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 
 
@@ -22,6 +22,7 @@ SUPPORTED_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
 class CuratedPlayer:
     source_player_id: str
     gsis_id: str | None
+    espn_id: str | None
     display_name: str
     position: str
     nfl_team: str | None
@@ -49,13 +50,33 @@ class CuratedWeek:
     touchdowns: float | None
     field_goal_attempts: float | None
     field_goals_made: float | None
+    field_goals_missed: float | None
+    field_goals_made_0_19: float | None
+    field_goals_made_20_29: float | None
+    field_goals_made_30_39: float | None
+    field_goals_made_40_49: float | None
+    field_goals_made_50_plus: float | None
+    field_goals_missed_0_19: float | None
+    field_goals_missed_20_29: float | None
+    field_goals_missed_30_39: float | None
+    field_goals_missed_40_49: float | None
+    field_goals_missed_50_plus: float | None
     extra_point_attempts: float | None
     extra_points_made: float | None
+    extra_points_missed: float | None
     defensive_sacks: float | None
     defensive_interceptions: float | None
     defensive_fumble_recoveries: float | None
     defensive_touchdowns: float | None
+    defensive_safeties: float | None
     points_allowed: float | None
+    defensive_points_allowed_0: float | None
+    defensive_points_allowed_1_6: float | None
+    defensive_points_allowed_7_13: float | None
+    defensive_points_allowed_14_20: float | None
+    defensive_points_allowed_21_27: float | None
+    defensive_points_allowed_28_34: float | None
+    defensive_points_allowed_35_plus: float | None
     yards_allowed: float | None
     red_zone_touches: float | None
     snap_share: float | None
@@ -68,6 +89,7 @@ PLAYER_SCHEMA = pa.schema(
     [
         ("source_player_id", pa.string()),
         ("gsis_id", pa.string()),
+        ("espn_id", pa.string()),
         ("display_name", pa.string()),
         ("position", pa.string()),
         ("nfl_team", pa.string()),
@@ -149,6 +171,7 @@ def curate_players(rows: Iterable[Mapping[str, Any]], manifest_id: str) -> list[
             CuratedPlayer(
                 source_player_id=source_player_id,
                 gsis_id=str(row["gsis_id"]) if row.get("gsis_id") else None,
+                espn_id=str(row["espn_id"]) if row.get("espn_id") else None,
                 display_name=str(_required(row, "display_name")),
                 position=position,
                 nfl_team=nfl_team,
@@ -249,6 +272,18 @@ def write_curated_parquet(
     path.parent.mkdir(parents=True, exist_ok=True)
     pq.write_table(table, path, compression="zstd", version="2.6")
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read_curated_players_parquet(path: Path) -> tuple[CuratedPlayer, ...]:
+    """Load a locally curated player table without exposing source-shaped rows."""
+    table = pq.read_table(path)
+    if table.schema != PLAYER_SCHEMA:
+        raise DataValidationError("curated player table does not match the required schema")
+    players = tuple(CuratedPlayer(**row) for row in table.to_pylist())
+    source_ids = [player.source_player_id for player in players]
+    if len(source_ids) != len(set(source_ids)):
+        raise DataValidationError("curated player table contains duplicate player keys")
+    return players
 
 
 def table_contract() -> dict[str, object]:

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from .curation import CuratedWeek
 from .errors import DataValidationError
 
-FEATURE_VERSION = "2"
+FEATURE_VERSION = "3"
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,10 +27,32 @@ class SemanticFeature:
     kicking_attempts_per_game_4: float | None
     kicking_conversion_rate_4: float | None
     extra_point_attempts_per_game_4: float | None
+    extra_points_made_per_game_4: float | None
+    extra_points_missed_per_game_4: float | None
+    field_goals_made_0_19_per_game_4: float | None
+    field_goals_made_20_29_per_game_4: float | None
+    field_goals_made_30_39_per_game_4: float | None
+    field_goals_made_40_49_per_game_4: float | None
+    field_goals_made_50_plus_per_game_4: float | None
+    field_goals_missed_0_19_per_game_4: float | None
+    field_goals_missed_20_29_per_game_4: float | None
+    field_goals_missed_30_39_per_game_4: float | None
+    field_goals_missed_40_49_per_game_4: float | None
+    field_goals_missed_50_plus_per_game_4: float | None
     defensive_sacks_per_game_4: float | None
+    defensive_interceptions_per_game_4: float | None
+    defensive_fumble_recoveries_per_game_4: float | None
+    defensive_safeties_per_game_4: float | None
     turnovers_forced_per_game_4: float | None
     points_allowed_per_game_4: float | None
     defensive_touchdowns_per_game_4: float | None
+    defensive_points_allowed_0_rate_4: float | None
+    defensive_points_allowed_1_6_rate_4: float | None
+    defensive_points_allowed_7_13_rate_4: float | None
+    defensive_points_allowed_14_20_rate_4: float | None
+    defensive_points_allowed_21_27_rate_4: float | None
+    defensive_points_allowed_28_34_rate_4: float | None
+    defensive_points_allowed_35_plus_rate_4: float | None
     feature_version: str
     lineage_manifest_ids: tuple[str, ...]
 
@@ -86,6 +108,12 @@ def build_semantic_features(rows: Iterable[CuratedWeek]) -> list[SemanticFeature
         kicking_attempts = [item.field_goal_attempts or 0 for item in history]
         kicking_attempts_made = [item.field_goals_made or 0 for item in history]
         extra_point_attempts = [item.extra_point_attempts or 0 for item in history]
+        extra_points_made = [
+            item.extra_points_made for item in history if item.extra_points_made is not None
+        ]
+        extra_points_missed = [
+            item.extra_points_missed for item in history if item.extra_points_missed is not None
+        ]
         defensive_sacks = [item.defensive_sacks or 0 for item in history]
         turnovers_forced = [
             (item.defensive_interceptions or 0) + (item.defensive_fumble_recoveries or 0)
@@ -129,10 +157,51 @@ def build_semantic_features(rows: Iterable[CuratedWeek]) -> list[SemanticFeature
                     else None
                 ),
                 extra_point_attempts_per_game_4=_mean(extra_point_attempts),
+                extra_points_made_per_game_4=_mean(extra_points_made),
+                extra_points_missed_per_game_4=_mean(extra_points_missed),
+                **{
+                    f"field_goals_made_{band}_per_game_4": _mean(
+                        [
+                            getattr(item, f"field_goals_made_{band}")
+                            for item in history
+                            if getattr(item, f"field_goals_made_{band}") is not None
+                        ]
+                    )
+                    for band in ("0_19", "20_29", "30_39", "40_49", "50_plus")
+                },
+                **{
+                    f"field_goals_missed_{band}_per_game_4": _mean(
+                        [
+                            getattr(item, f"field_goals_missed_{band}")
+                            for item in history
+                            if getattr(item, f"field_goals_missed_{band}") is not None
+                        ]
+                    )
+                    for band in ("0_19", "20_29", "30_39", "40_49", "50_plus")
+                },
                 defensive_sacks_per_game_4=_mean(defensive_sacks),
+                defensive_interceptions_per_game_4=_mean(
+                    [item.defensive_interceptions or 0 for item in history]
+                ),
+                defensive_fumble_recoveries_per_game_4=_mean(
+                    [item.defensive_fumble_recoveries or 0 for item in history]
+                ),
+                defensive_safeties_per_game_4=_mean(
+                    [item.defensive_safeties or 0 for item in history]
+                ),
                 turnovers_forced_per_game_4=_mean(turnovers_forced),
                 points_allowed_per_game_4=_mean(points_allowed),
                 defensive_touchdowns_per_game_4=_mean(defensive_touchdowns),
+                **{
+                    f"defensive_points_allowed_{band}_rate_4": _mean(
+                        [
+                            getattr(item, f"defensive_points_allowed_{band}")
+                            for item in history
+                            if getattr(item, f"defensive_points_allowed_{band}") is not None
+                        ]
+                    )
+                    for band in ("0", "1_6", "7_13", "14_20", "21_27", "28_34", "35_plus")
+                },
                 feature_version=FEATURE_VERSION,
                 lineage_manifest_ids=tuple(sorted({item.lineage_manifest_id for item in history})),
             )

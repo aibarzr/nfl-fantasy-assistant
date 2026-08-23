@@ -63,6 +63,11 @@ def _internal_id(player: CuratedPlayer) -> str:
     return f"{prefix}-{digest}"
 
 
+def internal_player_id(player: CuratedPlayer) -> str:
+    """Return the stable internal ID used by provider crosswalk builders."""
+    return _internal_id(player)
+
+
 def normalize_name(name: str) -> str:
     simplified = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
     simplified = re.sub(r"\b(jr|sr|ii|iii|iv|v)\b", "", simplified)

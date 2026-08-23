@@ -173,6 +173,34 @@ class DatasetPublisher:
         return DatasetManifest(**value)
 
 
+def read_published_dataset_manifest(version: Path) -> DatasetManifest:
+    """Load and checksum-verify one immutable published dataset version.
+
+    Consumers that pin a dataset must not treat a loose Parquet file as equivalent to an output
+    from a validated publication.  This reader verifies every declared output before exposing the
+    manifest, so a changed, missing, or incomplete version fails closed.
+    """
+    manifest_path = version / "dataset_manifest.json"
+    if not manifest_path.is_file():
+        raise DataValidationError("published dataset version is missing its manifest")
+    try:
+        manifest = DatasetPublisher._read_manifest(version)
+    except (OSError, ValueError, json.JSONDecodeError, TypeError) as error:
+        raise DataValidationError("published dataset manifest is invalid") from error
+    if manifest.dataset_version != version.name:
+        raise DataValidationError("published dataset directory does not match its manifest version")
+    for output in manifest.outputs:
+        relative = Path(output.relative_path)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise DataValidationError("published dataset manifest has an unsafe output path")
+        path = version / relative
+        if not path.is_file():
+            raise DataValidationError("published dataset output is missing")
+        if hashlib.sha256(path.read_bytes()).hexdigest() != output.checksum_sha256:
+            raise DataValidationError("published dataset output checksum does not match manifest")
+    return manifest
+
+
 def dataset_manifest(
     dataset_version: str,
     feature_version: str,

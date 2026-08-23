@@ -6,7 +6,25 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
+from .curation import CuratedPlayer
 from .errors import DataValidationError
+
+FIELD_GOAL_DISTANCE_BANDS = (
+    (0, 19, "0_19"),
+    (20, 29, "20_29"),
+    (30, 39, "30_39"),
+    (40, 49, "40_49"),
+    (50, None, "50_plus"),
+)
+POINTS_ALLOWED_BANDS = (
+    (0, 0, "0"),
+    (1, 6, "1_6"),
+    (7, 13, "7_13"),
+    (14, 20, "14_20"),
+    (21, 27, "21_27"),
+    (28, 34, "28_34"),
+    (35, None, "35_plus"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +33,39 @@ class KDefSourceRows:
 
     players: tuple[Mapping[str, object], ...]
     weeks: tuple[Mapping[str, object], ...]
+
+
+def build_season_team_defense_assets(
+    teams: Iterable[str], *, season: int, source_manifest_id: str, source_updated_at: str
+) -> tuple[CuratedPlayer, ...]:
+    """Create season-valid team-defense identities from exact NFL team codes only.
+
+    These structural draft assets intentionally contain no performance or projection data. Those
+    remain the responsibility of the approved PBP/feature preparation path.
+    """
+    if season < 2000 or not source_manifest_id or not source_updated_at:
+        raise DataValidationError("team-defense assets require season and source provenance")
+    normalized = tuple(sorted(team.upper() for team in teams))
+    if not normalized or len(normalized) != len(set(normalized)):
+        raise DataValidationError("team-defense assets require unique NFL teams")
+    if any(not team.isalpha() or not 2 <= len(team) <= 3 for team in normalized):
+        raise DataValidationError("team-defense asset has an invalid NFL team code")
+    return tuple(
+        CuratedPlayer(
+            source_player_id=f"defense:{team}",
+            gsis_id=None,
+            espn_id=None,
+            display_name=f"{team} Defense",
+            position="DEF",
+            nfl_team=team,
+            asset_type="team_defense",
+            valid_from_season=season,
+            valid_through_season=season,
+            source_updated_at=source_updated_at,
+            lineage_manifest_id=source_manifest_id,
+        )
+        for team in normalized
+    )
 
 
 def _text(row: Mapping[str, object], field: str) -> str | None:
@@ -35,6 +86,12 @@ def _as_number(value: object, field: str) -> float:
 
 def _number(row: Mapping[str, object], field: str) -> float:
     return _as_number(row.get(field), field)
+
+
+def _required_number(row: Mapping[str, object], field: str) -> float:
+    if row.get(field) is None or row.get(field) == "":
+        raise DataValidationError(f"K/DEF PBP transform requires {field}")
+    return _as_number(row[field], field)
 
 
 def _as_int(value: object, field: str) -> int:
@@ -64,6 +121,16 @@ def _week_key(row: Mapping[str, object], team: str) -> tuple[int, int, str]:
     return season, week, team
 
 
+def _band(value: float, bands: tuple[tuple[int, int | None, str], ...], field: str) -> str:
+    if not value.is_integer() or value < 0:
+        raise DataValidationError(f"{field} must be a non-negative integer")
+    number = int(value)
+    for lower, upper, name in bands:
+        if number >= lower and (upper is None or number <= upper):
+            return name
+    raise DataValidationError(f"{field} is outside supported scoring bands")
+
+
 def transform_pbp_k_def(
     rows: Iterable[Mapping[str, object]], *, source_updated_at: str
 ) -> KDefSourceRows:
@@ -84,6 +151,7 @@ def transform_pbp_k_def(
             "defensive_interceptions": 0.0,
             "defensive_fumble_recoveries": 0.0,
             "defensive_touchdowns": 0.0,
+            "defensive_safeties": 0.0,
             "yards_allowed": 0.0,
         }
     )
@@ -121,6 +189,7 @@ def transform_pbp_k_def(
             stats["defensive_touchdowns"] += float(
                 _flag(row, "return_touchdown") and _text(row, "td_team") == defense_team
             )
+            stats["defensive_safeties"] += float(_flag(row, "safety"))
             if _text(row, "play_type") in {"pass", "run"}:
                 stats["yards_allowed"] += _number(row, "yards_gained")
 
@@ -138,6 +207,17 @@ def transform_pbp_k_def(
                     "display_name": _required_text(row, "kicker_player_name"),
                     "position": "K",
                     "nfl_team": kicker_team,
+                    "field_goal_attempts": 0.0,
+                    "field_goals_made": 0.0,
+                    "field_goals_missed": 0.0,
+                    "extra_point_attempts": 0.0,
+                    "extra_points_made": 0.0,
+                    "extra_points_missed": 0.0,
+                    **{
+                        f"field_goals_{result}_{band}": 0.0
+                        for result in ("made", "missed")
+                        for _, _, band in FIELD_GOAL_DISTANCE_BANDS
+                    },
                     "source_updated_at": source_updated_at,
                 },
             )
@@ -149,12 +229,35 @@ def transform_pbp_k_def(
             record["field_goals_made"] = _as_number(
                 record.get("field_goals_made"), "field_goals_made"
             ) + float(is_field_goal and _text(row, "field_goal_result") == "made")
+            record["field_goals_missed"] = _as_number(
+                record.get("field_goals_missed"), "field_goals_missed"
+            ) + float(is_field_goal and _text(row, "field_goal_result") == "missed")
+            if is_field_goal:
+                result = _text(row, "field_goal_result")
+                if result not in {"made", "missed"}:
+                    raise DataValidationError(
+                        "field-goal result is not representable by scoring rules"
+                    )
+                band = _band(
+                    _required_number(row, "kick_distance"),
+                    FIELD_GOAL_DISTANCE_BANDS,
+                    "kick_distance",
+                )
+                field = f"field_goals_{result}_{band}"
+                record[field] = _as_number(record.get(field), field) + 1.0
             record["extra_point_attempts"] = _as_number(
                 record.get("extra_point_attempts"), "extra_point_attempts"
             ) + float(is_extra_point)
+            if is_extra_point and _text(row, "extra_point_result") not in {"good", "failed"}:
+                raise DataValidationError(
+                    "extra-point result is not representable by scoring rules"
+                )
             record["extra_points_made"] = _as_number(
                 record.get("extra_points_made"), "extra_points_made"
             ) + float(is_extra_point and _text(row, "extra_point_result") == "good")
+            record["extra_points_missed"] = _as_number(
+                record.get("extra_points_missed"), "extra_points_missed"
+            ) + float(is_extra_point and _text(row, "extra_point_result") == "failed")
 
     players: dict[str, dict[str, object]] = {}
     weeks: list[Mapping[str, object]] = []
@@ -212,6 +315,7 @@ def transform_pbp_k_def(
                 points_allowed += home_score
             else:
                 raise DataValidationError("defense team is not part of its PBP game")
+        points_band = _band(points_allowed, POINTS_ALLOWED_BANDS, "points_allowed")
         weeks.append(
             {
                 "player_id": defense_id,
@@ -220,6 +324,10 @@ def transform_pbp_k_def(
                 "position": "DEF",
                 **stats,
                 "points_allowed": points_allowed,
+                **{
+                    f"defensive_points_allowed_{band}": float(band == points_band)
+                    for _, _, band in POINTS_ALLOWED_BANDS
+                },
                 "active": True,
                 "source_updated_at": source_updated_at,
             }
