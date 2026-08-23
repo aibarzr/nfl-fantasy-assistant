@@ -7,13 +7,15 @@ from fastapi.testclient import TestClient
 
 from nfl_fantasy_assistant.api import create_app
 from nfl_fantasy_assistant.config import generate_token
-from nfl_fantasy_assistant.data.runtime import ActivatedSleeperDataset
+from nfl_fantasy_assistant.data.runtime import ActivatedSleeperDataset, RuntimeRecommendationInput
 from nfl_fantasy_assistant.domain.draft import (
     DraftId,
     Player,
     RecommendationCandidate,
     RecommendationSnapshot,
 )
+from nfl_fantasy_assistant.models.projection import PlayerProjection
+from nfl_fantasy_assistant.models.valuation import PlayerValue
 
 ORIGIN = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
 
@@ -53,6 +55,39 @@ def draft_payload(league_id: str) -> dict[str, object]:
         "feature_version": "feature-v1",
         "model_version": "model-v1",
     }
+
+
+def runtime_input(
+    identifier: str, position: str, market_prior: float
+) -> RuntimeRecommendationInput:
+    return RuntimeRecommendationInput(
+        identifier,
+        position,
+        PlayerProjection(
+            identifier,
+            position,
+            18.0,
+            12.0,
+            24.0,
+            0.8,
+            {},
+            ("fixture_warning",),
+            "projection-v3",
+            "semantic-v3",
+        ),
+        PlayerValue(
+            identifier,
+            position,
+            market_prior,
+            0.8,
+            0.1,
+            {"market_prior": market_prior},
+            (),
+            "value-v1",
+            "value-minmax-v1",
+        ),
+        "2026-08-23T00:00:00+00:00",
+    )
 
 
 def test_health_is_safe_and_all_other_resources_require_token_and_origin(tmp_path: Path) -> None:
@@ -256,6 +291,92 @@ def test_api_accepts_sleeper_neutral_k_def_event_and_recovery_contract(tmp_path:
         )
         assert snapshot.status_code == 200
         assert snapshot.json()["draft"]["accepted_picks"] == 1
+
+
+def test_sleeper_runtime_generates_current_recommendations_after_state_changes(
+    tmp_path: Path,
+) -> None:
+    token = generate_token()
+    dataset = ActivatedSleeperDataset(
+        "dataset-fixture",
+        "feature-fixture",
+        "projection-v3",
+        (
+            Player("kicker-1", {"sleeper": "sleeper-k"}, "kicker-1", "K"),
+            Player("defense-1", {"sleeper": "CHI"}, "defense-1", "DEF", "CHI"),
+        ),
+        2,
+        (runtime_input("kicker-1", "K", 0.8), runtime_input("defense-1", "DEF", 0.3)),
+    )
+    app = create_app(tmp_path / "drafts.sqlite3", token, ORIGIN, dataset)
+    config = {
+        "config_version": "sleeper-semantic-v3-fixture",
+        "team_count": 8,
+        "draft_type": "snake",
+        "roster_slots": [
+            {"name": "K", "eligible_positions": ["K"], "is_bench": False},
+            {"name": "DEF", "eligible_positions": ["DEF"], "is_bench": False},
+        ],
+        "scoring_rules": {"field_goals_made": 3.0, "defensive_sacks": 1.0},
+    }
+    opening = [f"team-{number}" for number in range(1, 9)]
+    with TestClient(app) as client:
+        assert (
+            client.get("/v1/diagnostics", headers=headers(token)).json()["recommendations"][
+                "status"
+            ]
+            == "ready"
+        )
+        league = client.post(
+            "/v1/leagues",
+            json={"provider": "sleeper", "provider_league_id": "league-runtime", "config": config},
+            headers=headers(token),
+        )
+        draft = client.post(
+            "/v1/drafts",
+            json={
+                "league_id": league.json()["league_id"],
+                "provider": "sleeper",
+                "provider_draft_id": "draft-runtime",
+                "config": config,
+                "user_team_id": "team-1",
+                "user_slot": 1,
+                "draft_order": [*opening, *reversed(opening)],
+                "dataset_version": "dataset-fixture",
+                "feature_version": "feature-fixture",
+                "model_version": "projection-v3",
+            },
+            headers=headers(token),
+        )
+        assert draft.status_code == 200
+        draft_id = draft.json()["draft_id"]
+        initial = client.get(f"/v1/drafts/{draft_id}/recommendations", headers=headers(token))
+        assert initial.status_code == 200
+        assert initial.json()["revision"] == 0
+        assert initial.json()["candidates"][0]["warnings"] == ["fixture_warning"]
+        accepted = client.post(
+            f"/v1/drafts/{draft_id}/events",
+            json={
+                "event_id": "sleeper:draft-runtime:pick:1",
+                "observed_at": "2026-08-23T00:00:00Z",
+                "surface": "sleeper",
+                "league_provider": "sleeper",
+                "type": "player_drafted",
+                "pick": {
+                    "overall_pick": 1,
+                    "team_id": "team-1",
+                    "player": {"provider": "sleeper", "external_id": "sleeper-k", "position": "K"},
+                },
+            },
+            headers=headers(token),
+        )
+        assert accepted.status_code == 200
+        refreshed = client.get(f"/v1/drafts/{draft_id}/recommendations", headers=headers(token))
+        assert refreshed.status_code == 200
+        assert refreshed.json()["revision"] == 1
+        assert [item["internal_player_id"] for item in refreshed.json()["candidates"]] == [
+            "defense-1"
+        ]
 
 
 def test_api_rejects_unactivated_or_mismatched_sleeper_runtime_pins(tmp_path: Path) -> None:

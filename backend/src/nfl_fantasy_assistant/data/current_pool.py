@@ -33,8 +33,10 @@ from .k_def import transform_pbp_k_def
 from .preparation import (
     LeaguePreparationContext,
     PreparedPlayer,
+    PreparedRecommendationInput,
     prepare_baseline_pool,
     write_prepared_parquet,
+    write_prepared_recommendation_inputs_parquet,
 )
 from .publishing import DatasetPublisher, OutputFile, dataset_manifest
 
@@ -66,6 +68,7 @@ class LocalLeagueConfiguration:
 @dataclass(frozen=True, slots=True)
 class CurrentPoolBuild:
     prepared: tuple[PreparedPlayer, ...]
+    recommendation_inputs: tuple[PreparedRecommendationInput, ...]
     source_manifest_ids: tuple[str, ...]
     license_notes: tuple[str, ...]
 
@@ -285,7 +288,7 @@ def _feature_input(feature: SemanticFeature, source_updated_at: str) -> Projecti
     return ProjectionFeatures(**values)
 
 
-def build_current_prepared_pool(
+def build_current_pool(
     players: Iterable[CuratedPlayer],
     weeks: Iterable[CuratedWeek],
     current_roster_snapshot: VerifiedSnapshot,
@@ -294,8 +297,8 @@ def build_current_prepared_pool(
     *,
     dataset_version: str,
     target_size: int = 300,
-) -> tuple[PreparedPlayer, ...]:
-    """Score only current, historically evidenced, crosswalk-resolved assets."""
+) -> CurrentPoolBuild:
+    """Build the prepared pool and its exact offline recommendation inputs together."""
     roster_ids = _current_roster_ids(current_roster_snapshot)
     assets = tuple(players)
     by_source = {player.source_player_id: player for player in assets}
@@ -370,7 +373,74 @@ def build_current_prepared_pool(
         raise DataValidationError("current prepared pool is empty")
     if any(player.internal_player_id not in crosswalk_internal_ids for player in prepared):
         raise DataValidationError("prepared pool contains a Sleeper-unmapped asset")
-    return tuple(prepared)
+    by_projection = {projection.internal_player_id: projection for projection in projections}
+    by_value = {value.internal_player_id: value for value in values}
+    recommendation_inputs: list[PreparedRecommendationInput] = []
+    for prepared_player in prepared:
+        input_projection = by_projection.get(prepared_player.internal_player_id)
+        input_value = by_value.get(prepared_player.internal_player_id)
+        if (
+            input_projection is None
+            or input_value is None
+            or input_projection.position != prepared_player.position
+        ):
+            raise DataValidationError("prepared player lacks matching projection and value output")
+        market_prior = input_value.components.get("market_prior")
+        if not isinstance(market_prior, float):
+            raise DataValidationError("prepared value lacks the runtime market prior")
+        recommendation_inputs.append(
+            PreparedRecommendationInput(
+                internal_player_id=prepared_player.internal_player_id,
+                position=prepared_player.position,
+                expected_points=input_projection.expected_points,
+                floor_points=input_projection.floor_points,
+                ceiling_points=input_projection.ceiling_points,
+                projection_confidence=input_projection.confidence,
+                projection_warnings=input_projection.warnings,
+                projection_model_version=input_projection.model_version,
+                projection_normalization_version=input_projection.normalization_version,
+                value_score=input_value.value_score,
+                value_confidence=input_value.confidence,
+                value_uncertainty=input_value.uncertainty,
+                market_prior=market_prior,
+                value_warnings=input_value.warnings,
+                value_version=input_value.value_version,
+                value_normalization_version=input_value.normalization_version,
+                source_updated_at=prepared_player.source_updated_at,
+                feature_version=prepared_player.feature_version,
+                dataset_version=prepared_player.dataset_version,
+            )
+        )
+    return CurrentPoolBuild(
+        prepared=tuple(prepared),
+        recommendation_inputs=tuple(
+            sorted(recommendation_inputs, key=lambda item: item.internal_player_id)
+        ),
+        source_manifest_ids=(current_roster_snapshot.manifest_id,),
+        license_notes=(current_roster_snapshot.license_note,),
+    )
+
+
+def build_current_prepared_pool(
+    players: Iterable[CuratedPlayer],
+    weeks: Iterable[CuratedWeek],
+    current_roster_snapshot: VerifiedSnapshot,
+    crosswalk_internal_ids: frozenset[str],
+    league: LocalLeagueConfiguration,
+    *,
+    dataset_version: str,
+    target_size: int = 300,
+) -> tuple[PreparedPlayer, ...]:
+    """Compatibility wrapper for callers that only need prepared baseline rows."""
+    return build_current_pool(
+        players,
+        weeks,
+        current_roster_snapshot,
+        crosswalk_internal_ids,
+        league,
+        dataset_version=dataset_version,
+        target_size=target_size,
+    ).prepared
 
 
 def publish_current_prepared_pool(
@@ -379,31 +449,67 @@ def publish_current_prepared_pool(
     publication_root: Path,
     *,
     dataset_version: str,
+    recommendation_inputs: Sequence[PreparedRecommendationInput] = (),
 ) -> Path:
     """Stage and atomically publish the base prepared version for crosswalk validation."""
-    temporary = publication_root / ".current-pool-tmp" / f"{dataset_version}.parquet"
+    temporary_root = publication_root / ".current-pool-tmp"
+    temporary = temporary_root / f"{dataset_version}.parquet"
     try:
         checksum = write_prepared_parquet(prepared, temporary)
         payload = temporary.read_bytes()
+        recommendation_checksum: str | None = None
+        recommendation_payload: bytes | None = None
+        if recommendation_inputs:
+            input_path = temporary_root / f"{dataset_version}-recommendation-inputs.parquet"
+            recommendation_checksum = write_prepared_recommendation_inputs_parquet(
+                recommendation_inputs, input_path
+            )
+            recommendation_payload = input_path.read_bytes()
     finally:
-        temporary.unlink(missing_ok=True)
-        temporary.parent.rmdir() if temporary.parent.exists() and not any(
-            temporary.parent.iterdir()
+        for path in (
+            temporary_root.glob(f"{dataset_version}*.parquet") if temporary_root.exists() else ()
+        ):
+            path.unlink(missing_ok=True)
+        temporary_root.rmdir() if temporary_root.exists() and not any(
+            temporary_root.iterdir()
         ) else None
-    outputs = (OutputFile("prepared.parquet", checksum, len(prepared)),)
+    outputs = [OutputFile("prepared.parquet", checksum, len(prepared))]
+    files = {"prepared.parquet": payload}
+    row_counts = {"prepared.parquet": len(prepared)}
+    schemas = {"draftable_assets": "curation-v4", "prepared": "v2"}
+    if recommendation_inputs:
+        if recommendation_checksum is None or recommendation_payload is None:
+            raise DataValidationError("prepared recommendation inputs were not staged")
+        prepared_ids = {player.internal_player_id for player in prepared}
+        input_ids = {item.internal_player_id for item in recommendation_inputs}
+        if prepared_ids != input_ids or any(
+            item.dataset_version != dataset_version or item.feature_version != FEATURE_VERSION
+            for item in recommendation_inputs
+        ):
+            raise DataValidationError(
+                "prepared recommendation inputs do not match the prepared pool"
+            )
+        outputs.append(
+            OutputFile(
+                "prepared_recommendation_inputs.parquet",
+                recommendation_checksum,
+                len(recommendation_inputs),
+            )
+        )
+        files["prepared_recommendation_inputs.parquet"] = recommendation_payload
+        row_counts["prepared_recommendation_inputs.parquet"] = len(recommendation_inputs)
+        schemas["prepared_recommendation_inputs"] = "v1"
     manifest = dataset_manifest(
         dataset_version,
         FEATURE_VERSION,
         "current-sleeper-prepared-pool-v1",
         tuple(sorted({snapshot.manifest_id for snapshot in source_snapshots})),
-        {"draftable_assets": "curation-v4", "prepared": "v2"},
-        outputs,
+        schemas,
+        tuple(outputs),
         {name: True for name in DatasetPublisher.REQUIRED_CHECKS},
         tuple(sorted({snapshot.license_note for snapshot in source_snapshots})),
     )
-    return DatasetPublisher(publication_root).publish(
-        manifest, {"prepared.parquet": payload}, {"prepared.parquet": len(prepared)}
-    )
+    return DatasetPublisher(publication_root).publish(manifest, files, row_counts)
 
 
 def build_and_publish_current_pool(
@@ -423,7 +529,7 @@ def build_and_publish_current_pool(
     crosswalk_ids = read_crosswalk_internal_ids(crosswalk_report_path, assets_path, season=2026)
     league = read_local_league_configuration(league_config_path)
     weeks = build_historical_weeks(player_stats, pbp)
-    prepared = build_current_prepared_pool(
+    build = build_current_pool(
         players,
         weeks,
         current_roster,
@@ -433,8 +539,9 @@ def build_and_publish_current_pool(
         target_size=target_size,
     )
     return publish_current_prepared_pool(
-        prepared,
+        build.prepared,
         (current_roster, *player_stats, *pbp),
         publication_root,
         dataset_version=dataset_version,
+        recommendation_inputs=build.recommendation_inputs,
     )

@@ -56,7 +56,11 @@ The MVP protocol provides these operations; exact schemas are introduced with th
 - `POST /v1/drafts/{draft_id}/events` — submit one idempotent observation.
 - `POST /v1/drafts/{draft_id}/snapshot` — reconcile a declared-completeness snapshot.
 - `GET /v1/drafts/{draft_id}` — canonical state summary and unresolved issues.
-- `GET /v1/drafts/{draft_id}/recommendations` — latest valid recommendations and provenance.
+- `GET /v1/drafts/{draft_id}/recommendations` — latest valid recommendations and provenance. For
+  an activated Sleeper runtime, initialization, accepted events, and successful reconciliation
+  regenerate that snapshot only after the canonical state is active and fully identity-resolved.
+  It returns `503` when the immutable dataset lacks recommendation inputs or the state is not
+  current; it never returns a previous revision as current.
 
 Creation operations return stable internal resource IDs. A platform league ID is namespaced by provider and is not itself the internal ID.
 

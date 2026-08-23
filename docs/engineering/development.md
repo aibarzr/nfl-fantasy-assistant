@@ -85,8 +85,12 @@ uv --directory backend run python -m nfl_fantasy_assistant serve \
 ```
 
 The server validates the manifest/checksums and activates only exact prepared-pool mappings. It
-does not import raw source data. A missing or invalid dataset leaves Sleeper runtime readiness
-unavailable; an incompatible version pin is rejected before draft creation.
+does not import raw source data. A derived runtime version with
+`prepared_recommendation_inputs.parquet` additionally activates deterministic recommendation
+generation; a legacy identity-only version remains safe for initialization but reports
+recommendations unavailable. Build a new current pool and then derive/publish a new Sleeper
+crosswalk version to add that artifact—never edit an existing version. An incompatible version pin
+is rejected before draft creation.
 
 ## Repository boundaries
 

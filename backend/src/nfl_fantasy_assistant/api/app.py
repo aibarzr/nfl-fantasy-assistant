@@ -23,10 +23,13 @@ from nfl_fantasy_assistant.application.drafts import (
     DraftSnapshot,
     ObservedPick,
 )
+from nfl_fantasy_assistant.application.recommendations import RecommendationRuntime
 from nfl_fantasy_assistant.config import credentials_match
 from nfl_fantasy_assistant.data.runtime import ActivatedSleeperDataset
 from nfl_fantasy_assistant.domain.draft import (
     DraftId,
+    DraftSession,
+    DraftStatus,
     LeagueConfig,
     LeagueId,
     PlayerReference,
@@ -294,6 +297,11 @@ def create_app(
         for player in sleeper_dataset.players:
             repository.save_player(player)
     service = DraftService(repository)
+    recommendation_runtime = (
+        RecommendationRuntime(sleeper_dataset, repository)
+        if sleeper_dataset is not None and sleeper_dataset.recommendations_ready
+        else None
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -304,6 +312,7 @@ def create_app(
     app.state.repository = repository
     app.state.service = service
     app.state.sleeper_dataset = sleeper_dataset
+    app.state.recommendation_runtime = recommendation_runtime
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[allowed_extension_origin],
@@ -380,9 +389,26 @@ def create_app(
                 status="unavailable", detail="No live adapter is active in Phase 3."
             ),
             recommendations=ComponentReadiness(
-                status="unavailable", detail="Recommendation calculations start in Phase 4."
+                status="ready" if recommendation_runtime is not None else "unavailable",
+                detail=(
+                    "Activated immutable Sleeper recommendation inputs are ready."
+                    if recommendation_runtime is not None
+                    else "Activated dataset lacks the immutable recommendation-input artifact."
+                    if sleeper_dataset is not None
+                    else "No runtime dataset loader is configured."
+                ),
             ),
         )
+
+    def refresh_recommendations(state: DraftSession) -> None:
+        if recommendation_runtime is None:
+            return
+        if (
+            state.provider == "sleeper"
+            and state.status is DraftStatus.ACTIVE
+            and not state.unresolved_observations
+        ):
+            recommendation_runtime.generate(state)
 
     @app.post(
         "/v1/leagues",
@@ -439,6 +465,7 @@ def create_app(
             request.model_version,
             tuple(pick.to_application() for pick in request.initial_picks),
         )
+        refresh_recommendations(state)
         return _state_response(state)
 
     @app.get(
@@ -471,6 +498,8 @@ def create_app(
                 request.protocol_version,
             ),
         )
+        if not result.replayed:
+            refresh_recommendations(result.session)
         return EventResponse(
             outcome=result.outcome,
             revision=result.revision,
@@ -497,6 +526,7 @@ def create_app(
                 tuple(pick.to_application() for pick in request.picks),
             ),
         )
+        refresh_recommendations(result.session)
         return SnapshotResponse(
             outcome=result.outcome,
             revision=result.revision,
@@ -512,6 +542,12 @@ def create_app(
     )
     async def recommendations(draft_id: str) -> RecommendationResponse:
         state = service._require_draft(DraftId(draft_id))
+        if state.provider == "sleeper" and recommendation_runtime is None:
+            raise ApplicationError(
+                "recommendations_unavailable",
+                "The activated Sleeper dataset lacks immutable recommendation inputs.",
+                503,
+            )
         if state.status.value in {"blocked", "reconciling"}:
             raise ApplicationError(
                 "recommendations_not_current",

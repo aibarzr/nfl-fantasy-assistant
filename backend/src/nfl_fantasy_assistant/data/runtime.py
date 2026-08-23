@@ -4,15 +4,23 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 
 from nfl_fantasy_assistant.domain.draft import Player
-from nfl_fantasy_assistant.models.projection import ProjectionParameters
+from nfl_fantasy_assistant.models.projection import PlayerProjection, ProjectionParameters
+from nfl_fantasy_assistant.models.valuation import PlayerValue
 
 from .errors import DataValidationError
-from .preparation import PreparedPlayer, PublishedPreparedPool, read_published_prepared_pool
+from .preparation import (
+    PreparedPlayer,
+    PreparedRecommendationInput,
+    PublishedPreparedPool,
+    read_prepared_recommendation_inputs_parquet,
+    read_published_prepared_pool,
+)
 from .sleeper_identity import SLEEPER_COVERAGE_SCHEMA, SLEEPER_EXTERNAL_ID_SCHEMA
 
 
@@ -25,6 +33,115 @@ class ActivatedSleeperDataset:
     model_version: str
     players: tuple[Player, ...]
     prepared_count: int
+    recommendation_inputs: tuple[RuntimeRecommendationInput, ...] = ()
+
+    @property
+    def recommendations_ready(self) -> bool:
+        return bool(self.recommendation_inputs)
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeRecommendationInput:
+    """Validated projection/value facts used only to rank current canonical availability."""
+
+    internal_player_id: str
+    position: str
+    projection: PlayerProjection
+    value: PlayerValue
+    source_updated_at: str
+
+
+def _finite_unit(value: object, label: str) -> None:
+    if not isinstance(value, int | float) or not isfinite(value) or not 0 <= value <= 1:
+        raise DataValidationError(f"runtime recommendation input has an invalid {label}")
+
+
+def _runtime_recommendation_inputs(
+    prepared: tuple[PreparedPlayer, ...], path: Path, model_version: str
+) -> tuple[RuntimeRecommendationInput, ...]:
+    rows: tuple[PreparedRecommendationInput, ...] = read_prepared_recommendation_inputs_parquet(
+        path
+    )
+    prepared_by_id = {player.internal_player_id: player for player in prepared}
+    if {row.internal_player_id for row in rows} != set(prepared_by_id):
+        raise DataValidationError("runtime recommendation inputs do not cover the prepared pool")
+    inputs: list[RuntimeRecommendationInput] = []
+    for row in rows:
+        prepared_player = prepared_by_id[row.internal_player_id]
+        if (
+            row.position != prepared_player.position
+            or row.source_updated_at != prepared_player.source_updated_at
+            or row.dataset_version != prepared_player.dataset_version
+            or row.feature_version != prepared_player.feature_version
+            or row.projection_model_version != model_version
+        ):
+            raise DataValidationError(
+                "runtime recommendation input conflicts with prepared provenance"
+            )
+        scoring_values = (
+            row.expected_points,
+            row.floor_points,
+            row.ceiling_points,
+            row.value_score,
+            row.value_uncertainty,
+            row.market_prior,
+        )
+        if (
+            not all(isinstance(value, int | float) and isfinite(value) for value in scoring_values)
+            or row.floor_points > row.expected_points
+            or row.expected_points > row.ceiling_points
+        ):
+            raise DataValidationError("runtime recommendation input has invalid scoring values")
+        for value, label in (
+            (row.projection_confidence, "projection confidence"),
+            (row.value_confidence, "value confidence"),
+            (row.value_uncertainty, "value uncertainty"),
+            (row.market_prior, "market prior"),
+        ):
+            _finite_unit(value, label)
+        if not all(
+            isinstance(warning, str) for warning in (*row.projection_warnings, *row.value_warnings)
+        ) or not all(
+            (
+                row.projection_normalization_version,
+                row.value_version,
+                row.value_normalization_version,
+            )
+        ):
+            raise DataValidationError(
+                "runtime recommendation input has incomplete model provenance"
+            )
+        inputs.append(
+            RuntimeRecommendationInput(
+                row.internal_player_id,
+                row.position,
+                PlayerProjection(
+                    row.internal_player_id,
+                    row.position,
+                    row.expected_points,
+                    row.floor_points,
+                    row.ceiling_points,
+                    row.projection_confidence,
+                    {},
+                    row.projection_warnings,
+                    row.projection_model_version,
+                    row.projection_normalization_version,
+                ),
+                PlayerValue(
+                    row.internal_player_id,
+                    row.position,
+                    row.value_score,
+                    row.value_confidence,
+                    row.value_uncertainty,
+                    {"market_prior": row.market_prior},
+                    row.value_warnings,
+                    row.value_version,
+                    row.value_normalization_version,
+                ),
+                row.source_updated_at,
+            )
+        )
+    return tuple(sorted(inputs, key=lambda item: item.internal_player_id))
 
 
 def _read_exact_table(path: Path, expected_schema: object, label: str) -> list[dict[str, object]]:
@@ -130,10 +247,32 @@ def activate_sleeper_dataset(version: Path) -> ActivatedSleeperDataset:
     )
     _validate_coverage(published.players, coverage)
     players = _runtime_players(published.players, mappings)
+    model_version = ProjectionParameters().model_version
+    recommendation_inputs: tuple[RuntimeRecommendationInput, ...] = ()
+    if "prepared_recommendation_inputs.parquet" in output_names:
+        recommendation_outputs = [
+            output
+            for output in published.manifest.outputs
+            if output.relative_path == "prepared_recommendation_inputs.parquet"
+        ]
+        if len(recommendation_outputs) != 1:
+            raise DataValidationError(
+                "runtime dataset has an ambiguous recommendation input output"
+            )
+        recommendation_inputs = _runtime_recommendation_inputs(
+            published.players,
+            version / "prepared_recommendation_inputs.parquet",
+            model_version,
+        )
+        if len(recommendation_inputs) != recommendation_outputs[0].row_count:
+            raise DataValidationError(
+                "runtime recommendation input row count does not match dataset manifest"
+            )
     return ActivatedSleeperDataset(
         published.dataset_version,
         published.feature_version,
-        ProjectionParameters().model_version,
+        model_version,
         players,
         len(published.players),
+        recommendation_inputs,
     )

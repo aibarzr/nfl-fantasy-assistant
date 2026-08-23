@@ -6,7 +6,7 @@ import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pyarrow as pa  # type: ignore[import-untyped]
@@ -15,7 +15,13 @@ import pyarrow.parquet as pq  # type: ignore[import-untyped]
 from .curation import SUPPORTED_POSITIONS, CuratedPlayer
 from .errors import DataValidationError
 from .identity import IdentityMapping, internal_player_id
-from .preparation import PreparedPlayer, read_published_prepared_pool, write_prepared_parquet
+from .preparation import (
+    PreparedPlayer,
+    read_prepared_recommendation_inputs_parquet,
+    read_published_prepared_pool,
+    write_prepared_parquet,
+    write_prepared_recommendation_inputs_parquet,
+)
 from .publishing import DatasetPublisher, OutputFile, dataset_manifest
 
 SLEEPER_IDENTITY_RULE_VERSION = "1"
@@ -640,7 +646,9 @@ def publish_sleeper_crosswalk_dataset(
         )
         for player in parent.players
     )
-    prepared_path = publication_root / ".sleeper-crosswalk-tmp" / f"{dataset_version}.parquet"
+    temporary_root = publication_root / ".sleeper-crosswalk-tmp"
+    prepared_path = temporary_root / f"{dataset_version}.parquet"
+    recommendation_inputs_path = temporary_root / f"{dataset_version}-recommendation-inputs.parquet"
     try:
         prepared_checksum = write_prepared_parquet(repinned_players, prepared_path)
         published_report = require_sleeper_prepared_pool_coverage(
@@ -660,6 +668,19 @@ def publish_sleeper_crosswalk_dataset(
             )
             for output in parent.manifest.outputs
         }
+        if "prepared_recommendation_inputs.parquet" in files:
+            repinned_inputs = tuple(
+                replace(row, dataset_version=dataset_version)
+                for row in read_prepared_recommendation_inputs_parquet(
+                    prepared_dataset_version / "prepared_recommendation_inputs.parquet"
+                )
+            )
+            write_prepared_recommendation_inputs_parquet(
+                repinned_inputs, recommendation_inputs_path
+            )
+            files["prepared_recommendation_inputs.parquet"] = (
+                recommendation_inputs_path.read_bytes()
+            )
         files["asset_external_ids.parquet"] = _parquet_bytes(
             [
                 {
@@ -724,8 +745,9 @@ def publish_sleeper_crosswalk_dataset(
         return SleeperCrosswalkPublication(version=version, report=published_report)
     finally:
         prepared_path.unlink(missing_ok=True)
-        if prepared_path.parent.exists():
+        recommendation_inputs_path.unlink(missing_ok=True)
+        if temporary_root.exists():
             try:
-                prepared_path.parent.rmdir()
+                temporary_root.rmdir()
             except OSError:
                 pass

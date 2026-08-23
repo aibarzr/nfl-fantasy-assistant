@@ -14,13 +14,17 @@ from nfl_fantasy_assistant.data.curation import CuratedPlayer, CuratedWeek
 from nfl_fantasy_assistant.data.current_pool import (
     LocalLeagueConfiguration,
     VerifiedSnapshot,
+    build_current_pool,
     build_current_prepared_pool,
     publish_current_prepared_pool,
     read_verified_snapshot,
 )
 from nfl_fantasy_assistant.data.errors import DataValidationError
 from nfl_fantasy_assistant.data.identity import internal_player_id
-from nfl_fantasy_assistant.data.preparation import read_published_prepared_pool
+from nfl_fantasy_assistant.data.preparation import (
+    read_prepared_recommendation_inputs_parquet,
+    read_published_prepared_pool,
+)
 
 NOW = "2026-08-23T00:00:00+00:00"
 
@@ -101,6 +105,26 @@ def test_current_pool_is_scored_only_for_current_crosswalk_assets() -> None:
     assert prepared[0].dataset_version == "fixture-current-v1"
 
 
+def test_current_pool_retains_exact_ranking_inputs_for_every_selected_asset() -> None:
+    build = build_current_pool(
+        (player(),),
+        tuple(week(number) for number in range(1, 6)),
+        roster_snapshot(),
+        frozenset({internal_player_id(player())}),
+        league(),
+        dataset_version="fixture-current-v1",
+        target_size=1,
+    )
+
+    assert {item.internal_player_id for item in build.recommendation_inputs} == {
+        build.prepared[0].internal_player_id
+    }
+    ranking_input = build.recommendation_inputs[0]
+    assert ranking_input.dataset_version == "fixture-current-v1"
+    assert ranking_input.projection_model_version == "projection-v3"
+    assert 0 <= ranking_input.market_prior <= 1
+
+
 def test_current_pool_fails_when_no_current_asset_has_a_crosswalk() -> None:
     with pytest.raises(DataValidationError, match="no current crosswalk-resolved"):
         build_current_prepared_pool(
@@ -114,7 +138,7 @@ def test_current_pool_fails_when_no_current_asset_has_a_crosswalk() -> None:
 
 
 def test_published_current_pool_is_a_checksum_verified_immutable_version(tmp_path: Path) -> None:
-    prepared = build_current_prepared_pool(
+    build = build_current_pool(
         (player(),),
         tuple(week(number) for number in range(1, 6)),
         roster_snapshot(),
@@ -125,11 +149,21 @@ def test_published_current_pool_is_a_checksum_verified_immutable_version(tmp_pat
     )
 
     version = publish_current_prepared_pool(
-        prepared, (roster_snapshot(),), tmp_path / "prepared", dataset_version="fixture-current-v1"
+        build.prepared,
+        (roster_snapshot(),),
+        tmp_path / "prepared",
+        dataset_version="fixture-current-v1",
+        recommendation_inputs=build.recommendation_inputs,
     )
 
     published = read_published_prepared_pool(version)
-    assert published.players == prepared
+    assert published.players == build.prepared
+    assert (
+        read_prepared_recommendation_inputs_parquet(
+            version / "prepared_recommendation_inputs.parquet"
+        )
+        == build.recommendation_inputs
+    )
     assert published.manifest.source_manifest_ids == ("rosters-manifest",)
 
 

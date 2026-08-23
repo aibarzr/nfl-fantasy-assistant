@@ -64,6 +64,10 @@ The exact schemas will be versioned with implementation, but the initial semanti
 - `player_week_features`: one player/season/week with usage, opportunity, efficiency, role, and availability measures.
 - `market_rankings`: player, format, rank/ADP, uncertainty/range, source and timestamp.
 - `player_projections`: player, league/scoring context class, expected/floor/ceiling/confidence, model and feature versions.
+- `prepared_recommendation_inputs`: the selected prepared assets' typed projection/value outputs,
+  uncertainty, ranking market prior, warnings, source timestamp, and model/normalization versions.
+  It is produced beside `prepared.parquet`; it is not raw source data and is sufficient only to
+  recompute state-dependent replacement/VOR and ranking under the pinned model.
 - `dataset_manifest`: dataset version, schemas, source timestamps/checksums, transform revision, and validation summary.
 
 Raw columns are not exposed directly to the draft engine. Feature names must express stable football/fantasy meaning rather than a source's column name.
@@ -111,6 +115,13 @@ the prepared assets. The runtime record contains the internal asset ID, position
 for `DEF` the exact structural team code; it contains neither a provider display name nor a raw
 catalog record. A different dataset, feature, or projection-model pin rejects Sleeper initialization
 before canonical draft state changes.
+
+When present, the derived crosswalk version also re-pins `prepared_recommendation_inputs.parquet`
+to its new immutable dataset version. The runtime validates a one-to-one match with the prepared
+pool and reconstructs only the typed projection/value records needed by the approved draft-ranking
+model. It never reruns projection or valuation from baseline scores at draft time. A legacy
+crosswalk version without this artifact may activate identities, but it reports recommendation
+readiness unavailable and cannot publish a recommendation snapshot.
 
 When a verified current Sleeper catalog and a season-state roster source disagree on an individual
 player's team, the mapping remains blocked unless a reviewer records an explicit, timestamped team

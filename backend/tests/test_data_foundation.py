@@ -38,11 +38,14 @@ from nfl_fantasy_assistant.data.k_def import (
 from nfl_fantasy_assistant.data.preparation import (
     LeaguePreparationContext,
     PreparedPlayer,
+    PreparedRecommendationInput,
     prepare_baseline_pool,
     read_prepared_parquet,
+    read_prepared_recommendation_inputs_parquet,
     read_published_prepared_pool,
     score_stat_line,
     write_prepared_parquet,
+    write_prepared_recommendation_inputs_parquet,
 )
 from nfl_fantasy_assistant.data.publishing import (
     DatasetPublisher,
@@ -536,21 +539,54 @@ def test_sleeper_crosswalk_is_published_in_a_new_immutable_dataset_version(
     )
     prepared_path = tmp_path / "prepared.parquet"
     prepared_checksum = write_prepared_parquet(prepared, prepared_path)
+    recommendation_path = tmp_path / "recommendation-inputs.parquet"
+    recommendation_checksum = write_prepared_recommendation_inputs_parquet(
+        (
+            PreparedRecommendationInput(
+                prepared[0].internal_player_id,
+                "RB",
+                15.0,
+                10.0,
+                20.0,
+                0.8,
+                (),
+                "projection-v3",
+                "semantic-v3",
+                0.7,
+                0.8,
+                0.1,
+                0.7,
+                (),
+                "value-v1",
+                "value-minmax-v1",
+                "2026-08-23T00:00:00+00:00",
+                "feature-v1",
+                "prepared-v1",
+            ),
+        ),
+        recommendation_path,
+    )
     parent_manifest = dataset_manifest(
         "prepared-v1",
         "feature-v1",
         "prepared-v1",
         ("nflverse-source-1",),
-        {"prepared": "v2"},
-        (OutputFile("prepared.parquet", prepared_checksum, 1),),
+        {"prepared": "v2", "prepared_recommendation_inputs": "v1"},
+        (
+            OutputFile("prepared.parquet", prepared_checksum, 1),
+            OutputFile("prepared_recommendation_inputs.parquet", recommendation_checksum, 1),
+        ),
         {name: True for name in DatasetPublisher.REQUIRED_CHECKS},
         ("CC BY 4.0",),
     )
     root = tmp_path / "published"
     parent_version = DatasetPublisher(root).publish(
         parent_manifest,
-        {"prepared.parquet": prepared_path.read_bytes()},
-        {"prepared.parquet": 1},
+        {
+            "prepared.parquet": prepared_path.read_bytes(),
+            "prepared_recommendation_inputs.parquet": recommendation_path.read_bytes(),
+        },
+        {"prepared.parquet": 1, "prepared_recommendation_inputs.parquet": 1},
     )
     covered = require_sleeper_prepared_pool_coverage(
         report,
@@ -574,6 +610,12 @@ def test_sleeper_crosswalk_is_published_in_a_new_immutable_dataset_version(
     published_pool = read_published_prepared_pool(publication.version)
     assert published_pool.dataset_version == "prepared-with-sleeper-v1"
     assert published_pool.players[0].dataset_version == "prepared-with-sleeper-v1"
+    assert (
+        read_prepared_recommendation_inputs_parquet(
+            publication.version / "prepared_recommendation_inputs.parquet"
+        )[0].dataset_version
+        == "prepared-with-sleeper-v1"
+    )
 
 
 def test_sleeper_catalog_parser_retains_only_mapping_fields() -> None:
