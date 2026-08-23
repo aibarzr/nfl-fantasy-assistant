@@ -67,8 +67,8 @@ Folders and ticket contents remain authoritative; this table is only an aggregat
 | 2 — Data foundation | 6 | 6 | Complete — local immutable ingestion, curated/identity/feature transforms, baseline pool, and atomic versioned publication |
 | 3 — Backend draft core | 9 | 9 | Complete — loopback FastAPI, SQLite canonical state, idempotent observations, reconciliation, derived rosters/availability, checked v1 contracts, and recommendation provenance |
 | 4 — Baseline recommendation engine | 5 | 5 | Complete — deterministic projections, calibrated player value, dynamic replacement/VOR, explainable Top-N scoring, and time-safe promotion checks |
-| 5 — Live platform loops | 13 | 5 | In progress — ESPN initialization is blocked on identity, semantic-codebook, and recovery evidence; Sleeper discovery is complete, NFL-0039 is blocked on the neutral scoring support in NFL-0041 before its prepared-pool mapping gate can close, and NFL-0040 is implementing the extension adapter behind it |
-| **Total** | **41** | **33** | |
+| 5 — Live platform loops | 13 | 6 | In progress — ESPN initialization is blocked on identity, semantic-codebook, and recovery evidence; Sleeper scoring semantics are complete, NFL-0039 remains blocked on a current prepared dataset before its prepared-pool mapping gate can close, and NFL-0040 is implementing the extension adapter behind it |
+| **Total** | **41** | **34** | |
 
 FantasyPros as a browser surface, Monte Carlo simulation, and in-season modules remain deferred in the roadmap and have no executable tickets yet.
 

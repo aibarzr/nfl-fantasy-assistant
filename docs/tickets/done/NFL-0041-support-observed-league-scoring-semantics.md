@@ -1,7 +1,7 @@
 # NFL-0041 — Support observed league scoring semantics
 
-- Status: In Progress
-- Resolution: Unresolved
+- Status: Done
+- Resolution: Done
 - Phase: 5 — Live platform loops
 - Owner: Codex
 - Created: 2026-08-23
@@ -73,15 +73,14 @@ ticket evidence or fixtures.
 
 ## Blocker
 
-No implementation blocker. Completion is held only by repository-wide tracked-file drift from the
-uncommitted NFL-0039/NFL-0040/NFL-0041 work set; do not discard or commit unrelated active work
-without an explicit review/commit decision.
+None.
 
 ## Completion summary
 
-Complete when a sanitized configuration fixture proves exact calculation for the enabled scoring
-rules, all required quality checks pass, and the mapping is usable by the Sleeper initialization
-path without modifying the operator's league.
+Completed with a sanitized configuration fixture proving the enabled K/DEF scoring semantics,
+strict extension-boundary translation to neutral `LeagueConfigInput`, PBP-boundary coverage, and
+versioned deterministic projection behavior. `./scripts/quality.sh all` passed after the coherent
+Sleeper foundation commit, including generated-contract and clean-worktree drift checks.
 
 ## History
 
@@ -108,3 +107,6 @@ path without modifying the operator's league.
   unused K scoring band. Source-unavailable values remain null and force a banded projection to
   reject incomplete coverage. Synthetic PBP tests now exercise every field-goal and points-allowed
   boundary plus an unrepresentable extra-point outcome.
+- 2026-08-23 — Completed after `a5042a7` and a clean `./scripts/quality.sh all`: backend format,
+  lint, type-check, 94 tests, OpenAPI contract, and build; extension format, lint, type-check, 32
+  tests, and build; documentation/sanitization; and tracked/staged drift checks all passed.
