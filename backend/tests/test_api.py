@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from nfl_fantasy_assistant.api import create_app
 from nfl_fantasy_assistant.config import generate_token
+from nfl_fantasy_assistant.data.runtime import ActivatedSleeperDataset
 from nfl_fantasy_assistant.domain.draft import (
     DraftId,
     Player,
@@ -167,10 +168,20 @@ def test_api_accepts_k_and_def_and_rejects_unknown_scoring_semantics(tmp_path: P
 
 def test_api_accepts_sleeper_neutral_k_def_event_and_recovery_contract(tmp_path: Path) -> None:
     token = generate_token()
-    app = create_app(tmp_path / "drafts.sqlite3", token, ORIGIN)
-    app.state.repository.save_player(Player("kicker-1", {"sleeper": "sleeper-k"}, "K", "K"))
-    app.state.repository.save_player(
-        Player("defense-1", {"sleeper": "sleeper-def"}, "D", "DEF", "CHI")
+    app = create_app(
+        tmp_path / "drafts.sqlite3",
+        token,
+        ORIGIN,
+        ActivatedSleeperDataset(
+            "dataset-fixture",
+            "feature-fixture",
+            "projection-v3",
+            (
+                Player("kicker-1", {"sleeper": "sleeper-k"}, "kicker-1", "K"),
+                Player("defense-1", {"sleeper": "CHI"}, "defense-1", "DEF", "CHI"),
+            ),
+            2,
+        ),
     )
     config = {
         "config_version": "sleeper-semantic-v3-fixture",
@@ -187,6 +198,10 @@ def test_api_accepts_sleeper_neutral_k_def_event_and_recovery_contract(tmp_path:
     }
     opening = [f"team-{number}" for number in range(1, 9)]
     with TestClient(app) as client:
+        diagnostics = client.get("/v1/diagnostics", headers=headers(token))
+        assert diagnostics.json()["data"]["status"] == "ready"
+        assert diagnostics.json()["identity"]["status"] == "ready"
+        assert diagnostics.json()["recommendations"]["status"] == "unavailable"
         league = client.post(
             "/v1/leagues",
             json={
@@ -209,7 +224,7 @@ def test_api_accepts_sleeper_neutral_k_def_event_and_recovery_contract(tmp_path:
                 "draft_order": [*opening, *reversed(opening)],
                 "dataset_version": "dataset-fixture",
                 "feature_version": "feature-fixture",
-                "model_version": "model-fixture",
+                "model_version": "projection-v3",
             },
             headers=headers(token),
         )
@@ -241,6 +256,65 @@ def test_api_accepts_sleeper_neutral_k_def_event_and_recovery_contract(tmp_path:
         )
         assert snapshot.status_code == 200
         assert snapshot.json()["draft"]["accepted_picks"] == 1
+
+
+def test_api_rejects_unactivated_or_mismatched_sleeper_runtime_pins(tmp_path: Path) -> None:
+    token = generate_token()
+    app = create_app(tmp_path / "drafts.sqlite3", token, ORIGIN)
+    with TestClient(app) as client:
+        league = client.post(
+            "/v1/leagues",
+            json={
+                "provider": "sleeper",
+                "provider_league_id": "league-fixture",
+                "config": league_payload()["config"],
+            },
+            headers=headers(token),
+        )
+        rejected = client.post(
+            "/v1/drafts",
+            json={
+                **draft_payload(league.json()["league_id"]),
+                "provider": "sleeper",
+            },
+            headers=headers(token),
+        )
+        assert rejected.status_code == 503
+        assert app.state.repository.find_draft_by_provider("sleeper", "draft-1") is None
+
+    active = create_app(
+        tmp_path / "active.sqlite3",
+        token,
+        ORIGIN,
+        ActivatedSleeperDataset(
+            "dataset-fixture",
+            "feature-fixture",
+            "projection-v3",
+            (Player("player-1", {"sleeper": "sleeper-1"}, "player-1", "QB"),),
+            1,
+        ),
+    )
+    with TestClient(active) as client:
+        league = client.post(
+            "/v1/leagues",
+            json={
+                "provider": "sleeper",
+                "provider_league_id": "league-fixture",
+                "config": league_payload()["config"],
+            },
+            headers=headers(token),
+        )
+        rejected = client.post(
+            "/v1/drafts",
+            json={
+                **draft_payload(league.json()["league_id"]),
+                "provider": "sleeper",
+                "dataset_version": "other-dataset",
+            },
+            headers=headers(token),
+        )
+        assert rejected.status_code == 409
+        assert active.state.repository.find_draft_by_provider("sleeper", "draft-1") is None
 
 
 def test_api_rejects_disallowed_origins_and_oversized_mutations_without_draft_state(

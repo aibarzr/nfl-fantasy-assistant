@@ -53,5 +53,10 @@ not poll, cache a pick list, submit a backend mutation, or initialize a live dra
 polling must add bounded backoff for documented `400`, `404`, `429`, `500`, and `503` failures. The
 player catalog remains a locally cached, versioned discovery/identity input, not a per-pick call.
 
-This finding authorizes the bounded recovery-validation adapter. Identity prepared-pool coverage
-and an end-to-end acceptance fixture remain mandatory before live initialization.
+The adapter now has a verified initialization handoff for the documented draft, league, roster,
+user, and picks route. It requires a locally configured opaque user ID, proves the exact
+user-to-roster-to-slot relationship, derives the snake schedule from the slot map and round count,
+and submits only neutral requests through the paired service worker. The local backend must report
+ready data and identity components before it reads provider initialization facts or mutates
+canonical state, then verifies the exact dataset/feature/model pins. Recommendation activation,
+polling/backoff, and an end-to-end live-draft acceptance fixture remain mandatory before release.

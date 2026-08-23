@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import hashlib
+from pathlib import Path
+
+import pyarrow as pa  # type: ignore[import-untyped]
+import pyarrow.parquet as pq  # type: ignore[import-untyped]
+import pytest
+
+from nfl_fantasy_assistant.data.errors import DataValidationError
+from nfl_fantasy_assistant.data.preparation import PreparedPlayer, write_prepared_parquet
+from nfl_fantasy_assistant.data.publishing import DatasetPublisher, OutputFile, dataset_manifest
+from nfl_fantasy_assistant.data.runtime import activate_sleeper_dataset
+from nfl_fantasy_assistant.data.sleeper_identity import (
+    SLEEPER_COVERAGE_SCHEMA,
+    SLEEPER_EXTERNAL_ID_SCHEMA,
+)
+
+
+def parquet_bytes(rows: list[dict[str, object]], schema: pa.Schema) -> bytes:
+    sink = pa.BufferOutputStream()
+    pq.write_table(
+        pa.Table.from_pylist(rows, schema=schema), sink, compression="zstd", version="2.6"
+    )
+    return bytes(sink.getvalue().to_pybytes())
+
+
+def published_dataset(root: Path, *, valid_coverage: bool = True) -> Path:
+    version_name = "sleeper-runtime-fixture-v1"
+    prepared = (
+        PreparedPlayer(
+            "player-fixture", "QB", 10.0, "2026-08-23T00:00:00+00:00", "3", version_name
+        ),
+        PreparedPlayer(
+            "defense-fixture", "DEF", 8.0, "2026-08-23T00:00:00+00:00", "3", version_name
+        ),
+    )
+    temporary = root / "prepared-tmp.parquet"
+    write_prepared_parquet(prepared, temporary)
+    prepared_bytes = temporary.read_bytes()
+    temporary.unlink()
+    mappings = parquet_bytes(
+        [
+            {
+                "provider": "sleeper",
+                "external_id": "player-external",
+                "internal_player_id": "player-fixture",
+                "asset_type": "player",
+                "resolution_method": "fixture",
+                "provenance": "fixture",
+                "validity_state": "resolved",
+                "season": 2026,
+            },
+            {
+                "provider": "sleeper",
+                "external_id": "DET",
+                "internal_player_id": "defense-fixture",
+                "asset_type": "team_defense",
+                "resolution_method": "fixture",
+                "provenance": "fixture",
+                "validity_state": "resolved",
+                "season": 2026,
+            },
+        ],
+        SLEEPER_EXTERNAL_ID_SCHEMA,
+    )
+    coverage = parquet_bytes(
+        [
+            {
+                "provider": "sleeper",
+                "season": 2026,
+                "position": position,
+                "catalog_total": 1,
+                "catalog_resolved": 1,
+                "catalog_blocked": 0,
+                "prepared_total": 1,
+                "prepared_resolved": 1 if valid_coverage else 0,
+                "prepared_blocked": 0 if valid_coverage else 1,
+            }
+            for position in ("QB", "DEF")
+        ],
+        SLEEPER_COVERAGE_SCHEMA,
+    )
+    files = {
+        "prepared.parquet": prepared_bytes,
+        "asset_external_ids.parquet": mappings,
+        "sleeper_crosswalk_coverage.parquet": coverage,
+    }
+    outputs = tuple(
+        OutputFile(name, hashlib.sha256(payload).hexdigest(), 2)
+        for name, payload in sorted(files.items())
+    )
+    manifest = dataset_manifest(
+        version_name,
+        "3",
+        "fixture-runtime-v1",
+        ("fixture-source",),
+        {
+            "prepared": "v2",
+            "asset_external_ids": "sleeper-v1",
+            "sleeper_crosswalk_coverage": "v1",
+        },
+        outputs,
+        {name: True for name in DatasetPublisher.REQUIRED_CHECKS},
+        ("fixture",),
+    )
+    return DatasetPublisher(root).publish(manifest, files, {name: 2 for name in files})
+
+
+def test_runtime_activation_loads_only_exact_prepared_sleeper_assets(tmp_path: Path) -> None:
+    activated = activate_sleeper_dataset(published_dataset(tmp_path / "prepared"))
+
+    assert activated.dataset_version == "sleeper-runtime-fixture-v1"
+    assert activated.feature_version == "3"
+    assert activated.model_version == "projection-v3"
+    assert {player.external_ids["sleeper"] for player in activated.players} == {
+        "player-external",
+        "DET",
+    }
+    defense = next(player for player in activated.players if player.position == "DEF")
+    assert defense.nfl_team == "DET"
+    assert all(player.display_name == player.internal_player_id for player in activated.players)
+
+
+def test_runtime_activation_rejects_bad_coverage_and_changed_outputs(tmp_path: Path) -> None:
+    with pytest.raises(DataValidationError, match="coverage"):
+        activate_sleeper_dataset(published_dataset(tmp_path / "invalid", valid_coverage=False))
+
+    version = published_dataset(tmp_path / "changed")
+    (version / "prepared.parquet").write_bytes(b"changed")
+    with pytest.raises(DataValidationError, match="checksum"):
+        activate_sleeper_dataset(version)

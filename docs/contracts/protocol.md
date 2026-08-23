@@ -112,6 +112,16 @@ identity gate is satisfied, the adapter may validate a recovery snapshot but mus
 league/draft or submit an event/snapshot mutation. A polling cycle is not itself a second canonical
 state owner; duplicate events and snapshots remain safe to resend to the backend.
 
+The initialization adapter receives a per-device opaque provider user ID and pinned dataset,
+feature, and model versions only from extension storage. It must prove that the configured user is
+one documented league member, owns exactly one same-league roster, and resolves through the draft's
+slot map to one slot; a nonempty documented `draft_order` entry for that user must agree. It derives
+the full snake schedule from the validated slot map and rounds. It performs no provider or backend
+mutation until the local diagnostics report ready prepared data and identity mappings. The backend
+then verifies that the request's dataset, feature, and model pins match the activated immutable
+Sleeper dataset before creating canonical state. Recommendation unavailability remains an explicit
+non-current outcome; it does not permit identity guessing or a version switch.
+
 ## Idempotency, ordering, and conflicts
 
 - `event_id` is the idempotency key within a draft.

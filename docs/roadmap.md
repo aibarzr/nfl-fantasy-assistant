@@ -9,9 +9,11 @@ blocked because the canonical sanitized findings do not establish an active-user
 semantic roster/scoring codebook, or authoritative recovery snapshot/replay. Sleeper is an
 approved second provider: its extension-bound, read-only API discovery is complete and records a
 validated initialization/recovery source plus strict versioned identity-mapping gates. K and DEF
-are supported MVP assets with completed neutral domain/data/model support; the Sleeper adapter
-still needs its own identity-mapping implementation before a league with those positions can
-initialize. The Phase 4
+are supported MVP assets with completed neutral domain/data/model support, observed scoring-key
+translation, a versioned published identity crosswalk, and a verified extension-to-backend
+initialization handoff. Runtime activation of the prepared dataset/identity mapping is complete;
+recommendation-runtime activation, polling and backoff, and end-to-end acceptance remain
+outstanding before trusted live recommendations can be released. The Phase 4
 recommendation engine is complete.
 
 ## Delivery phases

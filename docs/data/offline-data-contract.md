@@ -63,3 +63,10 @@ and row counts, every required quality check, timestamps, and license notes. A b
 `data/prepared/.staging`, validates, atomically renames into `versions/`, then atomically changes
 the active-version pointer. Failures preserve the last active version. A `PinnedDataset` rejects a
 different dataset or feature version, so future draft sessions cannot switch silently.
+
+The live backend activates an explicitly selected dataset-version directory rather than a loose
+Parquet path or the mutable active pointer. It verifies the whole manifest, typed `prepared.parquet`,
+typed Sleeper `asset_external_ids.parquet`, and prepared-pool coverage before persisting only the
+exact resolved Sleeper identities for prepared assets. Raw records, display names, and mappings
+outside that pool do not enter runtime state. A Sleeper draft must pin that dataset/feature version
+and the current projection-model version before initialization.

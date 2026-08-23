@@ -32,6 +32,11 @@ def main() -> None:
     )
     serve_parser = subparsers.add_parser("serve", help="Run the authenticated loopback API.")
     serve_parser.add_argument("--config-dir", type=Path, help="Private configuration directory.")
+    serve_parser.add_argument(
+        "--prepared-dataset",
+        type=Path,
+        help="Checksum-verified immutable Sleeper dataset version to activate at runtime.",
+    )
     review_parser = subparsers.add_parser(
         "sleeper-review", help="Review local Sleeper ID candidates."
     )
@@ -70,6 +75,25 @@ def main() -> None:
         "--dataset-version",
         help="New immutable dataset version; required for the publish action.",
     )
+    current_pool_parser = subparsers.add_parser(
+        "current-pool", help="Build an immutable current Sleeper prepared-pool dataset."
+    )
+    current_pool_parser.add_argument("--assets", type=Path, required=True)
+    current_pool_parser.add_argument("--current-roster-manifest", type=Path, required=True)
+    current_pool_parser.add_argument("--current-roster-snapshot", type=Path, required=True)
+    current_pool_parser.add_argument(
+        "--player-stats-manifest", type=Path, action="append", required=True
+    )
+    current_pool_parser.add_argument(
+        "--player-stats-snapshot", type=Path, action="append", required=True
+    )
+    current_pool_parser.add_argument("--pbp-manifest", type=Path, action="append", required=True)
+    current_pool_parser.add_argument("--pbp-snapshot", type=Path, action="append", required=True)
+    current_pool_parser.add_argument("--league-config", type=Path, required=True)
+    current_pool_parser.add_argument("--crosswalk-report", type=Path, required=True)
+    current_pool_parser.add_argument("--publication-root", type=Path, required=True)
+    current_pool_parser.add_argument("--dataset-version", required=True)
+    current_pool_parser.add_argument("--target-size", type=int, default=300)
     arguments = parser.parse_args()
 
     if arguments.command == "pair":
@@ -94,6 +118,8 @@ def main() -> None:
 
     if arguments.command == "serve":
         try:
+            from nfl_fantasy_assistant.data.runtime import activate_sleeper_dataset
+
             config_directory = arguments.config_dir
             runtime = (
                 load_runtime_settings(config_directory)
@@ -101,12 +127,22 @@ def main() -> None:
                 else load_runtime_settings()
             )
             token = TokenStore(config_directory).read() if config_directory else TokenStore().read()
-        except PairingError as error:
+            sleeper_dataset = (
+                activate_sleeper_dataset(arguments.prepared_dataset)
+                if arguments.prepared_dataset
+                else None
+            )
+        except (PairingError, ValueError) as error:
             parser.error(str(error))
         import uvicorn
 
         uvicorn.run(
-            create_app(runtime.database_path, token, runtime.extension_origin),
+            create_app(
+                runtime.database_path,
+                token,
+                runtime.extension_origin,
+                sleeper_dataset,
+            ),
             host=runtime.backend.host,
             port=runtime.backend.port,
         )
@@ -294,6 +330,47 @@ def main() -> None:
         )
         if published_version:
             print(f"Published Sleeper crosswalk dataset version: {published_version}.")
+        return
+
+    if arguments.command == "current-pool":
+        from nfl_fantasy_assistant.data.current_pool import (
+            build_and_publish_current_pool,
+            read_verified_snapshot,
+        )
+
+        if len(arguments.player_stats_manifest) != len(arguments.player_stats_snapshot):
+            parser.error("player-stat manifests and snapshots must be paired")
+        if len(arguments.pbp_manifest) != len(arguments.pbp_snapshot):
+            parser.error("PBP manifests and snapshots must be paired")
+        try:
+            version = build_and_publish_current_pool(
+                arguments.assets,
+                read_verified_snapshot(
+                    arguments.current_roster_manifest, arguments.current_roster_snapshot
+                ),
+                tuple(
+                    read_verified_snapshot(manifest, snapshot)
+                    for manifest, snapshot in zip(
+                        arguments.player_stats_manifest,
+                        arguments.player_stats_snapshot,
+                        strict=True,
+                    )
+                ),
+                tuple(
+                    read_verified_snapshot(manifest, snapshot)
+                    for manifest, snapshot in zip(
+                        arguments.pbp_manifest, arguments.pbp_snapshot, strict=True
+                    )
+                ),
+                arguments.league_config,
+                arguments.crosswalk_report,
+                arguments.publication_root,
+                dataset_version=arguments.dataset_version,
+                target_size=arguments.target_size,
+            )
+        except (OSError, ValueError) as error:
+            parser.error(str(error))
+        print(f"Published current Sleeper prepared-pool dataset version: {version}.")
         return
 
     if arguments.check_config:

@@ -105,6 +105,13 @@ checksum, row count, and every row's dataset/feature versions must agree with th
 manifest. Every internal asset in that pool must have a Sleeper mapping; an unmapped asset aborts
 publication rather than being omitted or guessed.
 
+At runtime, the backend accepts only that crosswalk-published dataset version. It revalidates the
+manifest, prepared rows, crosswalk schema, and coverage, then persists exact Sleeper IDs only for
+the prepared assets. The runtime record contains the internal asset ID, position, external ID, and
+for `DEF` the exact structural team code; it contains neither a provider display name nor a raw
+catalog record. A different dataset, feature, or projection-model pin rejects Sleeper initialization
+before canonical draft state changes.
+
 When a verified current Sleeper catalog and a season-state roster source disagree on an individual
 player's team, the mapping remains blocked unless a reviewer records an explicit, timestamped team
 transition override naming both teams and the reason. This override is unavailable for DEF and

@@ -53,6 +53,41 @@ directory, `uv --directory backend run python -m nfl_fantasy_assistant --check-c
 the loopback-only non-secret settings and paired token without displaying the token.
 Do not store a real token in shell history, source, fixtures, URLs, a page DOM, or logs.
 
+### Sleeper initialization context
+
+Sleeper initialization additionally needs the operator's stable opaque Sleeper user ID and the
+exact published dataset, feature, and model versions. Set them only in the extension service-worker
+developer-tools console after the local runtime reports all three as ready:
+
+```js
+await chrome.storage.local.set({
+  sleeperInitializationConfiguration: {
+    userId: "<stable-sleeper-user-id>",
+    datasetVersion: "<published-dataset-version>",
+    featureVersion: "<published-feature-version>",
+    modelVersion: "<published-model-version>",
+  },
+});
+```
+
+The adapter verifies that ID against the documented league user, roster, slot, and (when present)
+draft-order facts. It never derives the account from a name, URL, creator metadata, page DOM, or
+browser authentication. Do not use a website console, retain a provider response, or commit this
+per-device configuration.
+
+To activate Sleeper identity resolution, start the backend with the explicit immutable published
+crosswalk dataset directory (not its mutable publication root or a loose Parquet file):
+
+```sh
+uv --directory backend run python -m nfl_fantasy_assistant serve \
+  --config-dir <config-dir> \
+  --prepared-dataset <published-sleeper-dataset-version-directory>
+```
+
+The server validates the manifest/checksums and activates only exact prepared-pool mappings. It
+does not import raw source data. A missing or invalid dataset leaves Sleeper runtime readiness
+unavailable; an incompatible version pin is rejected before draft creation.
+
 ## Repository boundaries
 
 ```text

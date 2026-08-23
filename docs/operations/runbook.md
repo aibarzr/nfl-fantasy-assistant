@@ -3,10 +3,12 @@
 ## Current limitation
 
 The backend draft core and deterministic recommendation engine are implemented. The ESPN live
-adapter remains blocked on validated initialization/recovery evidence. Sleeper can perform an
-on-demand, service-worker-only read-only recovery validation on its exact supported surface, but
-must not initialize a live draft until identity prepared-pool coverage and the end-to-end acceptance
-fixture are complete. Neutral K/DEF domain-data-model support is complete.
+adapter remains blocked on validated initialization/recovery evidence. Sleeper has a verified,
+service-worker-only initialization handoff on its exact supported surface, but it refuses both
+provider reads and backend mutations until the local prepared-data and identity runtime reports
+ready. Runtime dataset activation now uses an explicit immutable crosswalk-published version;
+recommendation activation, polling/backoff, and the end-to-end acceptance fixture remain
+outstanding. Neutral K/DEF domain-data-model support is complete.
 
 ## Installation and startup checklist
 
@@ -20,6 +22,8 @@ The supported local startup procedure is:
    `[runtime]` section; see `backend/config.example.toml`.
 5. Run `./scripts/quality.sh all`, then start the loopback service with
    `uv --directory backend run python -m nfl_fantasy_assistant serve --config-dir <config-dir>`.
+   For Sleeper initialization, add `--prepared-dataset <published-sleeper-dataset-version-directory>`;
+   the server rejects an unchecked, incomplete, or non-crosswalk dataset.
 6. Load `extension/dist` unpacked only after the relevant provider adapter has passed its release
    checks; an unsupported or discovery-only provider must display a non-current state.
 

@@ -24,6 +24,7 @@ from nfl_fantasy_assistant.application.drafts import (
     ObservedPick,
 )
 from nfl_fantasy_assistant.config import credentials_match
+from nfl_fantasy_assistant.data.runtime import ActivatedSleeperDataset
 from nfl_fantasy_assistant.domain.draft import (
     DraftId,
     LeagueConfig,
@@ -283,11 +284,15 @@ def create_app(
     database_path: Path,
     token: str,
     allowed_extension_origin: str,
+    sleeper_dataset: ActivatedSleeperDataset | None = None,
 ) -> FastAPI:
     """Create an app with explicit local dependencies, suitable for safe test injection."""
     if not allowed_extension_origin.startswith("chrome-extension://"):
         raise ValueError("allowed extension origin must be an exact chrome-extension origin")
     repository = SqliteDraftRepository(database_path)
+    if sleeper_dataset is not None:
+        for player in sleeper_dataset.players:
+            repository.save_player(player)
     service = DraftService(repository)
 
     @asynccontextmanager
@@ -298,6 +303,7 @@ def create_app(
     app = FastAPI(title="NFL Fantasy Assistant", version=API_VERSION, lifespan=lifespan)
     app.state.repository = repository
     app.state.service = service
+    app.state.sleeper_dataset = sleeper_dataset
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[allowed_extension_origin],
@@ -350,14 +356,25 @@ def create_app(
         dependencies=[Depends(authenticate)],
     )
     async def diagnostics() -> DiagnosticsResponse:
+        dataset_ready = sleeper_dataset is not None
         return DiagnosticsResponse(
             api_version="v1",
             database=ComponentReadiness(status="ready", detail="SQLite migrations are current."),
             data=ComponentReadiness(
-                status="unavailable", detail="No runtime dataset loader is configured."
+                status="ready" if dataset_ready else "unavailable",
+                detail=(
+                    f"Activated immutable Sleeper dataset {sleeper_dataset.dataset_version}."
+                    if sleeper_dataset is not None
+                    else "No runtime dataset loader is configured."
+                ),
             ),
             identity=ComponentReadiness(
-                status="degraded", detail="Only persisted exact identities are ready."
+                status="ready" if dataset_ready else "degraded",
+                detail=(
+                    f"Loaded {sleeper_dataset.prepared_count} exact Sleeper prepared-pool mappings."
+                    if sleeper_dataset is not None
+                    else "Only persisted exact identities are ready."
+                ),
             ),
             adapter=ComponentReadiness(
                 status="unavailable", detail="No live adapter is active in Phase 3."
@@ -388,6 +405,27 @@ def create_app(
         dependencies=[Depends(authenticate)],
     )
     async def create_draft(request: DraftCreateRequest) -> DraftStateResponse:
+        if request.provider == "sleeper":
+            if sleeper_dataset is None:
+                raise ApplicationError(
+                    "sleeper_runtime_unavailable",
+                    "Sleeper initialization requires an activated immutable local dataset.",
+                    503,
+                )
+            if (
+                request.dataset_version,
+                request.feature_version,
+                request.model_version,
+            ) != (
+                sleeper_dataset.dataset_version,
+                sleeper_dataset.feature_version,
+                sleeper_dataset.model_version,
+            ):
+                raise ApplicationError(
+                    "sleeper_runtime_version_conflict",
+                    "Sleeper initialization pins do not match the activated local dataset.",
+                    409,
+                )
         state = service.initialize_or_resume(
             LeagueId(request.league_id),
             request.provider,
