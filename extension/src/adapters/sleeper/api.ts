@@ -4,6 +4,11 @@ import {
   adaptSleeperRecoverySnapshot,
   type SleeperRecoveryResult,
 } from "./recovery-snapshot.js";
+import {
+  adaptSleeperInitializationSnapshot,
+  type SleeperInitializationResult,
+} from "./initial-snapshot.js";
+import type { SleeperInitializationConfiguration } from "../../config/sleeper-initialization.js";
 import { detectSleeperDraftSurface } from "./surface.js";
 
 const API_ORIGIN = "https://api.sleeper.app/v1";
@@ -11,10 +16,13 @@ const MAX_RESPONSE_BYTES = 512 * 1024;
 
 type SleeperDraft = {
   draft_id?: string;
+  league_id?: string;
   type?: string;
+  status?: string;
   sport?: string;
-  settings?: { teams?: number };
-  slot_to_roster_id?: Record<string, string>;
+  settings?: { teams?: number; rounds?: number };
+  slot_to_roster_id?: Record<string, string | number>;
+  draft_order?: Record<string, number> | null;
 };
 
 async function getJson(fetcher: typeof fetch, path: string): Promise<unknown> {
@@ -73,8 +81,9 @@ export async function fetchSleeperRecoverySnapshot(
     Object.keys(draft.slot_to_roster_id).length !== 8 ||
     !Array.from({ length: 8 }, (_, index) => String(index + 1)).every(
       (slot) =>
-        typeof draft.slot_to_roster_id?.[slot] === "string" &&
-        draft.slot_to_roster_id[slot].length > 0,
+        (typeof draft.slot_to_roster_id?.[slot] === "string" ||
+          typeof draft.slot_to_roster_id?.[slot] === "number") &&
+        `${draft.slot_to_roster_id[slot]}`.length > 0,
     ) ||
     new Set(Object.values(draft.slot_to_roster_id)).size !== 8
   ) {
@@ -96,6 +105,59 @@ export async function fetchSleeperRecoverySnapshot(
     surface.draftId,
     picks,
     observedAt,
-    draft.slot_to_roster_id,
+    Object.fromEntries(
+      Object.entries(draft.slot_to_roster_id).map(([slot, rosterId]) => [
+        slot,
+        `${rosterId}`,
+      ]),
+    ),
   );
+}
+
+/**
+ * Reads only the documented facts required to construct a neutral initialization handoff.
+ * The caller owns local readiness and the paired backend mutation; raw responses stay in memory.
+ */
+export async function fetchSleeperInitializationSnapshot(
+  pageUrl: string,
+  observedAt: string,
+  context: SleeperInitializationConfiguration,
+  fetcher: typeof fetch = fetch,
+): Promise<SleeperInitializationResult> {
+  const surface = detectSleeperDraftSurface(pageUrl);
+  if (!surface.supported) {
+    return {
+      status: "unavailable",
+      code: "invalid_draft_identity",
+      detail: "Sleeper initialization requires the exact active draft surface.",
+    };
+  }
+  const draft = (await getJson(
+    fetcher,
+    `/draft/${surface.draftId}`,
+  )) as SleeperDraft;
+  if (typeof draft.league_id !== "string" || draft.league_id.length === 0) {
+    return {
+      status: "unavailable",
+      code: "invalid_league_identity",
+      detail:
+        "The active Sleeper draft has no league-backed initialization identity.",
+    };
+  }
+  const [league, rosters, users, picks] = await Promise.all([
+    getJson(fetcher, `/league/${draft.league_id}`),
+    getJson(fetcher, `/league/${draft.league_id}/rosters`),
+    getJson(fetcher, `/league/${draft.league_id}/users`),
+    getJson(fetcher, `/draft/${surface.draftId}/picks`),
+  ]);
+  return adaptSleeperInitializationSnapshot({
+    draftId: surface.draftId,
+    draft,
+    league: league as Record<string, unknown>,
+    rosters,
+    users,
+    picks,
+    observedAt,
+    context,
+  });
 }

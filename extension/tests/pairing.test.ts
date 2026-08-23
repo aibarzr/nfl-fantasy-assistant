@@ -4,6 +4,10 @@ import {
   savePairedBackendConfiguration,
   validatePairedBackendConfiguration,
 } from "../src/config/pairing.js";
+import {
+  saveSleeperInitializationConfiguration,
+  validateSleeperInitializationConfiguration,
+} from "../src/config/sleeper-initialization.js";
 
 const testToken = "a".repeat(43);
 
@@ -44,5 +48,42 @@ describe("extension pairing", () => {
         bearerToken: testToken,
       }),
     ).toThrow("loopback");
+  });
+});
+
+describe("Sleeper initialization configuration", () => {
+  it("stores only explicit opaque identity and pinned version context in extension storage", async () => {
+    const writes: Record<string, unknown>[] = [];
+    await saveSleeperInitializationConfiguration(
+      {
+        userId: "user-fixture",
+        datasetVersion: "dataset-fixture",
+        featureVersion: "feature-fixture",
+        modelVersion: "model-fixture",
+      },
+      { set: async (value) => void writes.push(value), get: async () => ({}) },
+    );
+
+    expect(writes).toEqual([
+      {
+        sleeperInitializationConfiguration: {
+          userId: "user-fixture",
+          datasetVersion: "dataset-fixture",
+          featureVersion: "feature-fixture",
+          modelVersion: "model-fixture",
+        },
+      },
+    ]);
+  });
+
+  it("rejects missing initialization pins before any provider read", () => {
+    expect(() =>
+      validateSleeperInitializationConfiguration({
+        userId: "",
+        datasetVersion: "dataset-fixture",
+        featureVersion: "feature-fixture",
+        modelVersion: "model-fixture",
+      }),
+    ).toThrow("opaque user ID");
   });
 });

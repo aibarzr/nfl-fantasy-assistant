@@ -100,7 +100,7 @@ describe("Sleeper content lifecycle", () => {
     expect(createPanel).not.toHaveBeenCalled();
   });
 
-  it("uses the service worker recovery path but leaves initialization blocked by identity coverage", async () => {
+  it("uses the service-worker initialization handoff only after backend health succeeds", async () => {
     const { panel, states } = panelCapture();
     const sendMessage = vi.fn(async (message: { operation: string }) => {
       if (message.operation === "health") {
@@ -108,16 +108,7 @@ describe("Sleeper content lifecycle", () => {
       }
       return {
         ok: true,
-        data: {
-          status: "ready",
-          request: {
-            source: "sleeper_api",
-            observed_at: "2026-08-23T00:00:00Z",
-            declared_complete: true,
-            picks: [],
-          },
-          eventIds: [],
-        },
+        data: { draft_id: "draft-local" },
       };
     });
 
@@ -136,17 +127,19 @@ describe("Sleeper content lifecycle", () => {
       2,
       expect.objectContaining({
         type: "nfl_fantasy_assistant_backend",
-        operation: "sleeper_recovery",
+        operation: "sleeper_initialize",
         pageUrl: sleeperUrl,
       }),
     );
     expect(states.at(-1)).toMatchObject({
       kind: "empty",
-      detail: expect.stringContaining("prepared-pool identity gate"),
+      detail: expect.stringContaining(
+        "Initialized the validated Sleeper draft",
+      ),
     });
   });
 
-  it("renders an error and never offers initialization when the recovery snapshot is invalid", async () => {
+  it("renders an error when the initialization evidence is invalid", async () => {
     const { panel, states } = panelCapture();
     const sendMessage = vi
       .fn()

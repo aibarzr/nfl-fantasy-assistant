@@ -7,9 +7,17 @@ import {
 } from "./api/client.js";
 import type { components } from "./api/generated-contract.js";
 import { detectSleeperDraftSurface } from "./adapters/sleeper/surface.js";
-import { loadPairedBackendConfiguration } from "./config/pairing.js";
-import { fetchSleeperRecoverySnapshot } from "./adapters/sleeper/api.js";
+import {
+  fetchSleeperInitializationSnapshot,
+  fetchSleeperRecoverySnapshot,
+} from "./adapters/sleeper/api.js";
+import type { SleeperInitializationResult } from "./adapters/sleeper/initial-snapshot.js";
 import type { SleeperRecoveryResult } from "./adapters/sleeper/recovery-snapshot.js";
+import {
+  loadSleeperInitializationConfiguration,
+  type SleeperInitializationConfiguration,
+} from "./config/sleeper-initialization.js";
+import { loadPairedBackendConfiguration } from "./config/pairing.js";
 
 type DiagnosticsResponse = components["schemas"]["DiagnosticsResponse"];
 type DraftStateResponse = components["schemas"]["DraftStateResponse"];
@@ -60,6 +68,12 @@ export type WorkerRequest =
       operation: "sleeper_recovery";
       pageUrl: string;
       observedAt: string;
+    }
+  | {
+      type: "nfl_fantasy_assistant_backend";
+      operation: "sleeper_initialize";
+      pageUrl: string;
+      observedAt: string;
     };
 
 type WorkerSuccess =
@@ -100,6 +114,12 @@ export interface WorkerDependencies {
     pageUrl: string,
     observedAt: string,
   ): Promise<SleeperRecoveryResult>;
+  loadSleeperInitializationConfiguration?(): Promise<SleeperInitializationConfiguration>;
+  fetchSleeperInitialization?(
+    pageUrl: string,
+    observedAt: string,
+    context: SleeperInitializationConfiguration,
+  ): Promise<SleeperInitializationResult>;
 }
 
 const dependencies: WorkerDependencies = {
@@ -107,6 +127,9 @@ const dependencies: WorkerDependencies = {
   createClient: (configuration) => new BackendApiClient({ configuration }),
   fetchSleeperRecovery: (pageUrl, observedAt) =>
     fetchSleeperRecoverySnapshot(pageUrl, observedAt),
+  loadSleeperInitializationConfiguration,
+  fetchSleeperInitialization: (pageUrl, observedAt, context) =>
+    fetchSleeperInitializationSnapshot(pageUrl, observedAt, context),
 };
 
 const SLEEPER_PAGE_URL_MAX_LENGTH = 2_048;
@@ -122,7 +145,12 @@ export function isWorkerRequest(value: unknown): value is WorkerRequest {
   ) {
     return false;
   }
-  if (value.operation !== "sleeper_recovery") return true;
+  if (
+    value.operation !== "sleeper_recovery" &&
+    value.operation !== "sleeper_initialize"
+  ) {
+    return true;
+  }
   return (
     "pageUrl" in value &&
     typeof value.pageUrl === "string" &&
@@ -160,6 +188,13 @@ function errorResponse(error: unknown): WorkerResponse {
   };
 }
 
+function sleeperRuntimeIsReady(diagnostics: DiagnosticsResponse): boolean {
+  return (
+    diagnostics.data.status === "ready" &&
+    diagnostics.identity.status === "ready"
+  );
+}
+
 export async function handleWorkerRequest(
   request: WorkerRequest,
   injected: WorkerDependencies = dependencies,
@@ -184,6 +219,46 @@ export async function handleWorkerRequest(
     }
     const client = injected.createClient(await injected.loadConfiguration());
     switch (request.operation) {
+      case "sleeper_initialize": {
+        const diagnostics = await client.diagnostics();
+        if (!sleeperRuntimeIsReady(diagnostics)) {
+          return {
+            ok: false,
+            error: {
+              kind: "unavailable",
+              message:
+                "The local backend has no ready prepared data and exact identity mapping for Sleeper initialization.",
+              retryable: false,
+            },
+          };
+        }
+        const context = await (
+          injected.loadSleeperInitializationConfiguration ??
+          loadSleeperInitializationConfiguration
+        )();
+        const initialization = await (
+          injected.fetchSleeperInitialization ??
+          fetchSleeperInitializationSnapshot
+        )(request.pageUrl, request.observedAt, context);
+        if (initialization.status !== "ready") {
+          return {
+            ok: false,
+            error: {
+              kind: "validation",
+              message: initialization.detail,
+              retryable: false,
+            },
+          };
+        }
+        const league = await client.createLeague(initialization.leagueRequest);
+        return {
+          ok: true,
+          data: await client.createDraft({
+            ...initialization.draftRequest,
+            league_id: league.league_id,
+          }),
+        };
+      }
       case "health":
         return { ok: true, data: await client.health() };
       case "diagnostics":

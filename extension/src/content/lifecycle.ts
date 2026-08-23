@@ -8,7 +8,7 @@ import type { RecommendationPanelState } from "../ui/panel.js";
 
 type SendMessage = (message: {
   type: string;
-  operation: "health" | "sleeper_recovery";
+  operation: "health" | "sleeper_initialize" | "sleeper_recovery";
   pageUrl?: string;
   observedAt?: string;
 }) => Promise<unknown>;
@@ -98,19 +98,19 @@ export async function startSleeperContentLifecycle(
     isHealthResponse(response.data) &&
     response.data.api_version === "v1"
   ) {
-    const recovery = (await sendMessage({
+    const initialization = (await sendMessage({
       type: "nfl_fantasy_assistant_backend",
-      operation: "sleeper_recovery",
+      operation: "sleeper_initialize",
       pageUrl,
       observedAt: new Date().toISOString(),
     })) as WorkerResponse;
-    if (!recovery.ok) {
-      panel.render(stateFromApiError(recovery.error));
+    if (!initialization.ok) {
+      panel.render(stateFromApiError(initialization.error));
     } else {
       panel.render({
         kind: "empty",
         detail:
-          "Validated the current Sleeper recovery snapshot. Waiting for the prepared-pool identity gate before initialization.",
+          "Initialized the validated Sleeper draft with its pinned local data/model versions.",
       });
     }
   } else {
