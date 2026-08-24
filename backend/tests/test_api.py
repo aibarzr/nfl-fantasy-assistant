@@ -359,7 +359,11 @@ def test_sleeper_runtime_generates_current_recommendations_after_state_changes(
         initial = client.get(f"/v1/drafts/{draft_id}/recommendations", headers=headers(token))
         assert initial.status_code == 200
         assert initial.json()["revision"] == 0
-        assert initial.json()["candidates"][0]["warnings"] == ["fixture_warning"]
+        assert initial.json()["candidates"][0]["warnings"] == [
+            "current_status_unknown",
+            "fixture_warning",
+            "historical_durability_unknown",
+        ]
         accepted = client.post(
             f"/v1/drafts/{draft_id}/events",
             json={
@@ -383,6 +387,119 @@ def test_sleeper_runtime_generates_current_recommendations_after_state_changes(
         assert [item["internal_player_id"] for item in refreshed.json()["candidates"]] == [
             "defense-1"
         ]
+
+
+def test_player_status_overlay_is_complete_fresh_idempotent_and_reproducible(
+    tmp_path: Path,
+) -> None:
+    token = generate_token()
+    dataset = ActivatedSleeperDataset(
+        "dataset-status",
+        "feature-status",
+        "projection-v3",
+        (
+            Player("player-1", {"sleeper": "sleeper-1"}, "player-1", "QB"),
+            Player("player-2", {"sleeper": "sleeper-2"}, "player-2", "RB"),
+        ),
+        2,
+        (runtime_input("player-1", "QB", 0.8), runtime_input("player-2", "RB", 0.7)),
+    )
+    app = create_app(tmp_path / "drafts.sqlite3", token, ORIGIN, dataset)
+    config = {
+        "config_version": "status-fixture",
+        "team_count": 8,
+        "draft_type": "snake",
+        "roster_slots": [
+            {"name": "QB", "eligible_positions": ["QB"], "is_bench": False},
+            {"name": "RB", "eligible_positions": ["RB"], "is_bench": False},
+        ],
+        "scoring_rules": {"rushing_yards": 0.1},
+    }
+    opening = [f"team-{number}" for number in range(1, 9)]
+    with TestClient(app) as client:
+        league = client.post(
+            "/v1/leagues",
+            json={"provider": "sleeper", "provider_league_id": "league-status", "config": config},
+            headers=headers(token),
+        )
+        draft = client.post(
+            "/v1/drafts",
+            json={
+                "league_id": league.json()["league_id"],
+                "provider": "sleeper",
+                "provider_draft_id": "draft-status",
+                "config": config,
+                "user_team_id": "team-1",
+                "user_slot": 1,
+                "draft_order": [*opening, *reversed(opening)],
+                "dataset_version": "dataset-status",
+                "feature_version": "feature-status",
+                "model_version": "projection-v3",
+            },
+            headers=headers(token),
+        )
+        draft_id = draft.json()["draft_id"]
+        requirements = client.get(
+            f"/v1/drafts/{draft_id}/player-status-requirements", headers=headers(token)
+        )
+        assert requirements.json()["external_ids"] == ["sleeper-1", "sleeper-2"]
+        observed_at = datetime.now(UTC).isoformat()
+        statuses = [
+            {"external_id": "sleeper-1", "status": "healthy"},
+            {"external_id": "sleeper-2", "status": "questionable"},
+        ]
+        payload = {
+            "source_revision": "sleeper-players-fixture",
+            "source_checksum": "a" * 64,
+            "observed_at": observed_at,
+            "declared_complete": True,
+            "statuses": statuses,
+        }
+        created = client.post(
+            f"/v1/drafts/{draft_id}/player-status", json=payload, headers=headers(token)
+        )
+        assert created.status_code == 200
+        replay = client.post(
+            f"/v1/drafts/{draft_id}/player-status", json=payload, headers=headers(token)
+        )
+        assert replay.json()["replayed"] is True
+        changed = client.post(
+            f"/v1/drafts/{draft_id}/player-status",
+            json={**payload, "source_revision": "sleeper-players-fixture-next"},
+            headers=headers(token),
+        )
+        assert changed.status_code == 200
+        assert changed.json()["replayed"] is False
+        recommendations = client.get(
+            f"/v1/drafts/{draft_id}/recommendations", headers=headers(token)
+        )
+        assert recommendations.json()["status_overlay_id"] == changed.json()["overlay_id"]
+        assert requirements.json()["latest_overlay_observed_at"] is None
+        current_requirements = client.get(
+            f"/v1/drafts/{draft_id}/player-status-requirements", headers=headers(token)
+        )
+        assert current_requirements.json()["latest_overlay_observed_at"] is not None
+        incomplete = client.post(
+            f"/v1/drafts/{draft_id}/player-status",
+            json={**payload, "statuses": statuses[:1]},
+            headers=headers(token),
+        )
+        assert incomplete.status_code == 400
+        assert incomplete.json()["error"]["code"] == "player_status_incomplete"
+        stale = client.post(
+            f"/v1/drafts/{draft_id}/player-status",
+            json={**payload, "observed_at": "2020-01-01T00:00:00+00:00"},
+            headers=headers(token),
+        )
+        assert stale.status_code == 400
+        assert stale.json()["error"]["code"] == "player_status_stale"
+        future = client.post(
+            f"/v1/drafts/{draft_id}/player-status",
+            json={**payload, "observed_at": "2099-01-01T00:00:00+00:00"},
+            headers=headers(token),
+        )
+        assert future.status_code == 400
+        assert future.json()["error"]["code"] == "player_status_stale"
 
 
 def test_api_rejects_unactivated_or_mismatched_sleeper_runtime_pins(tmp_path: Path) -> None:

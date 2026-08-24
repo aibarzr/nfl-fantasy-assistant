@@ -26,6 +26,12 @@ from nfl_fantasy_assistant.models.projection import (
 from nfl_fantasy_assistant.models.valuation import ValueInput, value_players
 
 from .curation import CuratedPlayer, CuratedWeek, curate_weeks, read_curated_players_parquet
+from .durability import (
+    DurabilityFeature,
+    ParticipationState,
+    PlayerWeekParticipation,
+    build_durability_features,
+)
 from .errors import DataValidationError
 from .features import FEATURE_VERSION, SemanticFeature, build_semantic_features
 from .identity import Resolution, internal_player_id
@@ -216,7 +222,9 @@ def _historical_skill_rows(snapshot: VerifiedSnapshot) -> list[Mapping[str, obje
                 "position": position,
                 **{target: _number(row, source) for target, source in fields.items()},
                 "touchdowns": touchdowns,
-                "active": True,
+                # Player statistics establish production only. They do not establish that a
+                # player was healthy or available for a team game.
+                "active": None,
                 "source_updated_at": snapshot.retrieved_at,
             }
         )
@@ -257,6 +265,41 @@ def build_historical_weeks(
     return tuple(curate_weeks(rows, "multiple-source-manifests"))
 
 
+def build_historical_durability(snapshot: VerifiedSnapshot) -> tuple[DurabilityFeature, ...]:
+    """Validate an exact derived eligibility calendar before it can supply durability features."""
+    if snapshot.dataset != "participation_calendar":
+        raise DataValidationError("durability requires a participation_calendar snapshot")
+    observations: list[PlayerWeekParticipation] = []
+    for row in snapshot.rows:
+        try:
+            state = ParticipationState(str(row["state"]))
+            player_id = str(row["player_id"])
+            nfl_team = str(row["nfl_team"])
+            season_raw = row["season"]
+            week_raw = row["week"]
+            if not isinstance(season_raw, int | str) or not isinstance(week_raw, int | str):
+                raise ValueError("season/week must be integer-like")
+            season = int(season_raw)
+            week = int(week_raw)
+        except (KeyError, TypeError, ValueError) as error:
+            raise DataValidationError(
+                "participation calendar row has invalid exact fields"
+            ) from error
+        observations.append(
+            PlayerWeekParticipation(
+                player_id,
+                nfl_team,
+                season,
+                week,
+                state,
+                (snapshot.manifest_id,),
+            )
+        )
+    if not observations:
+        raise DataValidationError("participation calendar has no observations")
+    return build_durability_features(observations)
+
+
 def _current_roster_ids(snapshot: VerifiedSnapshot) -> frozenset[str]:
     if snapshot.dataset != "rosters" or snapshot.season != 2026:
         raise DataValidationError("current candidate eligibility requires the 2026 roster snapshot")
@@ -284,6 +327,7 @@ def _feature_input(feature: SemanticFeature, source_updated_at: str) -> Projecti
         if field.endswith("_4")
     }
     values["historical_points_per_game"] = feature.historical_production_points_per_game
+    values["durability_rate"] = feature.durability_rate_4
     values["source_updated_at"] = timestamp
     return ProjectionFeatures(**values)
 
@@ -297,6 +341,9 @@ def build_current_pool(
     *,
     dataset_version: str,
     target_size: int = 300,
+    durability_features: Sequence[DurabilityFeature] = (),
+    durability_source_manifest_ids: Sequence[str] = (),
+    durability_license_notes: Sequence[str] = (),
 ) -> CurrentPoolBuild:
     """Build the prepared pool and its exact offline recommendation inputs together."""
     roster_ids = _current_roster_ids(current_roster_snapshot)
@@ -304,7 +351,7 @@ def build_current_pool(
     by_source = {player.source_player_id: player for player in assets}
     if len(by_source) != len(assets):
         raise DataValidationError("current asset table has duplicate source IDs")
-    features = build_semantic_features(weeks)
+    features = build_semantic_features(weeks, durability_features)
     latest: dict[str, SemanticFeature] = {}
     for feature in features:
         if (previous := latest.get(feature.source_player_id)) is None or (
@@ -375,6 +422,7 @@ def build_current_pool(
         raise DataValidationError("prepared pool contains a Sleeper-unmapped asset")
     by_projection = {projection.internal_player_id: projection for projection in projections}
     by_value = {value.internal_player_id: value for value in values}
+    feature_by_internal = {internal_player_id(player): feature for player, feature in candidates}
     recommendation_inputs: list[PreparedRecommendationInput] = []
     for prepared_player in prepared:
         input_projection = by_projection.get(prepared_player.internal_player_id)
@@ -385,6 +433,9 @@ def build_current_pool(
             or input_projection.position != prepared_player.position
         ):
             raise DataValidationError("prepared player lacks matching projection and value output")
+        current_feature = feature_by_internal.get(prepared_player.internal_player_id)
+        if current_feature is None:
+            raise DataValidationError("prepared player lacks matching historical feature")
         market_prior = input_value.components.get("market_prior")
         if not isinstance(market_prior, float):
             raise DataValidationError("prepared value lacks the runtime market prior")
@@ -409,6 +460,11 @@ def build_current_pool(
                 source_updated_at=prepared_player.source_updated_at,
                 feature_version=prepared_player.feature_version,
                 dataset_version=prepared_player.dataset_version,
+                historical_durability=(
+                    current_feature.multi_season_durability
+                    or current_feature.durability_rate_8
+                    or current_feature.durability_rate_4
+                ),
             )
         )
     return CurrentPoolBuild(
@@ -416,8 +472,12 @@ def build_current_pool(
         recommendation_inputs=tuple(
             sorted(recommendation_inputs, key=lambda item: item.internal_player_id)
         ),
-        source_manifest_ids=(current_roster_snapshot.manifest_id,),
-        license_notes=(current_roster_snapshot.license_note,),
+        source_manifest_ids=tuple(
+            sorted({current_roster_snapshot.manifest_id, *durability_source_manifest_ids})
+        ),
+        license_notes=tuple(
+            sorted({current_roster_snapshot.license_note, *durability_license_notes})
+        ),
     )
 
 
@@ -430,6 +490,7 @@ def build_current_prepared_pool(
     *,
     dataset_version: str,
     target_size: int = 300,
+    durability_features: Sequence[DurabilityFeature] = (),
 ) -> tuple[PreparedPlayer, ...]:
     """Compatibility wrapper for callers that only need prepared baseline rows."""
     return build_current_pool(
@@ -440,6 +501,7 @@ def build_current_prepared_pool(
         league,
         dataset_version=dataset_version,
         target_size=target_size,
+        durability_features=durability_features,
     ).prepared
 
 
@@ -498,7 +560,7 @@ def publish_current_prepared_pool(
         )
         files["prepared_recommendation_inputs.parquet"] = recommendation_payload
         row_counts["prepared_recommendation_inputs.parquet"] = len(recommendation_inputs)
-        schemas["prepared_recommendation_inputs"] = "v1"
+        schemas["prepared_recommendation_inputs"] = "v2"
     manifest = dataset_manifest(
         dataset_version,
         FEATURE_VERSION,
@@ -523,12 +585,20 @@ def build_and_publish_current_pool(
     *,
     dataset_version: str,
     target_size: int = 300,
+    participation_calendar: VerifiedSnapshot | None = None,
 ) -> Path:
     """The complete local operation used by the CLI; inputs are all explicit and verified."""
     players = read_curated_players_parquet(assets_path)
     crosswalk_ids = read_crosswalk_internal_ids(crosswalk_report_path, assets_path, season=2026)
     league = read_local_league_configuration(league_config_path)
     weeks = build_historical_weeks(player_stats, pbp)
+    durability_features: tuple[DurabilityFeature, ...] = ()
+    durability_manifest_ids: tuple[str, ...] = ()
+    durability_license_notes: tuple[str, ...] = ()
+    if participation_calendar is not None:
+        durability_features = build_historical_durability(participation_calendar)
+        durability_manifest_ids = (participation_calendar.manifest_id,)
+        durability_license_notes = (participation_calendar.license_note,)
     build = build_current_pool(
         players,
         weeks,
@@ -537,10 +607,18 @@ def build_and_publish_current_pool(
         league,
         dataset_version=dataset_version,
         target_size=target_size,
+        durability_features=durability_features,
+        durability_source_manifest_ids=durability_manifest_ids,
+        durability_license_notes=durability_license_notes,
     )
     return publish_current_prepared_pool(
         build.prepared,
-        (current_roster, *player_stats, *pbp),
+        (
+            current_roster,
+            *player_stats,
+            *pbp,
+            *((participation_calendar,) if participation_calendar is not None else ()),
+        ),
         publication_root,
         dataset_version=dataset_version,
         recommendation_inputs=build.recommendation_inputs,

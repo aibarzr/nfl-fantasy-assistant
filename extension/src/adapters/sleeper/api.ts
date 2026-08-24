@@ -15,6 +15,24 @@ const API_ORIGIN = "https://api.sleeper.app/v1";
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const MAX_PLAYER_CATALOG_RESPONSE_BYTES = 16 * 1024 * 1024;
 
+export type NeutralPlayerStatus =
+  | "healthy"
+  | "limited"
+  | "questionable"
+  | "doubtful"
+  | "out"
+  | "reserve"
+  | "inactive"
+  | "unknown";
+
+export interface SleeperPlayerStatusSnapshot {
+  source_revision: string;
+  source_checksum: string;
+  observed_at: string;
+  declared_complete: true;
+  statuses: Array<{ external_id: string; status: NeutralPlayerStatus }>;
+}
+
 type SleeperDraft = {
   draft_id?: string;
   league_id?: string;
@@ -51,6 +69,142 @@ async function getJson(
   return JSON.parse(payload) as unknown;
 }
 
+async function getPlayerCatalog(
+  fetcher: typeof fetch,
+): Promise<{ catalog: Record<string, unknown>; checksum: string }> {
+  const response = await fetcher(`${API_ORIGIN}/players/nfl`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  const contentLength = Number(response.headers.get("content-length"));
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_PLAYER_CATALOG_RESPONSE_BYTES
+  ) {
+    throw new Error("Sleeper API response exceeds the adapter safety limit.");
+  }
+  const payload = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `Sleeper API request failed with status ${response.status}.`,
+    );
+  }
+  if (payload.length > MAX_PLAYER_CATALOG_RESPONSE_BYTES) {
+    throw new Error("Sleeper API response exceeds the adapter safety limit.");
+  }
+  const parsed = JSON.parse(payload) as unknown;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("Sleeper player catalog is not an object.");
+  }
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(payload),
+  );
+  const checksum = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return { catalog: parsed as Record<string, unknown>, checksum };
+}
+
+function optionalString(
+  record: Record<string, unknown>,
+  field: string,
+): string | undefined {
+  const value = record[field];
+  if (value === null || value === undefined || value === "") return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`Sleeper player status field ${field} is not a string.`);
+  }
+  return value.trim();
+}
+
+/** Translates only approved provider status facts; no medical text crosses the adapter. */
+export function normalizeSleeperPlayerStatus(
+  record: Record<string, unknown>,
+): NeutralPlayerStatus {
+  const rosterStatus = optionalString(record, "status");
+  const injuryStatus = optionalString(record, "injury_status");
+  const practice = optionalString(record, "practice_participation");
+  const reserve = new Set(["IR", "PUP", "NFI"]);
+  if (rosterStatus === "Active" && injuryStatus && reserve.has(injuryStatus)) {
+    throw new Error(
+      "Sleeper player status contains contradictory active and reserve facts.",
+    );
+  }
+  if (
+    rosterStatus === "Injured Reserve" ||
+    rosterStatus === "Physically Unable to Perform" ||
+    rosterStatus === "Non Football Injury" ||
+    (injuryStatus !== undefined && reserve.has(injuryStatus))
+  ) {
+    return "reserve";
+  }
+  if (injuryStatus === "Out") return "out";
+  if (injuryStatus === "Doubtful") return "doubtful";
+  if (injuryStatus === "Questionable") return "questionable";
+  if (rosterStatus === "Inactive") return "inactive";
+  if (rosterStatus === "Active") {
+    if (practice === "Limited Participation") return "limited";
+    if (practice === "Did Not Participate") return "unknown";
+    if (practice === undefined || practice === "Full Participation") {
+      return "healthy";
+    }
+  }
+  if (rosterStatus === "Retired" || rosterStatus === "Free Agent")
+    return "inactive";
+  if (
+    rosterStatus === undefined &&
+    injuryStatus === undefined &&
+    practice === undefined
+  ) {
+    return "unknown";
+  }
+  throw new Error(
+    "Sleeper player status contains an unsupported provider enum.",
+  );
+}
+
+/**
+ * Builds a complete neutral status overlay for exact prepared-pool identities.
+ * The raw catalog stays in extension memory and is never posted or persisted.
+ */
+export async function fetchSleeperPlayerStatuses(
+  externalIds: readonly string[],
+  observedAt: string,
+  fetcher: typeof fetch = fetch,
+): Promise<SleeperPlayerStatusSnapshot> {
+  const requested = new Set(externalIds.filter((value) => value.length > 0));
+  if (requested.size === 0 || requested.size !== externalIds.length) {
+    throw new Error(
+      "Sleeper player-status requests require unique exact identifiers.",
+    );
+  }
+  const { catalog, checksum } = await getPlayerCatalog(fetcher);
+  const statuses = Array.from(requested, (externalId) => {
+    const record = catalog[externalId];
+    if (
+      typeof record !== "object" ||
+      record === null ||
+      Array.isArray(record)
+    ) {
+      throw new Error(
+        "Sleeper player status catalog lacks an exact requested identity.",
+      );
+    }
+    return {
+      external_id: externalId,
+      status: normalizeSleeperPlayerStatus(record as Record<string, unknown>),
+    };
+  });
+  return {
+    source_revision: `sleeper-players-${checksum}`,
+    source_checksum: checksum,
+    observed_at: observedAt,
+    declared_complete: true,
+    statuses,
+  };
+}
+
 /** Resolve only requested public catalog labels for local presentation. */
 export async function fetchSleeperPlayerLabels(
   externalIds: readonly string[],
@@ -58,21 +212,10 @@ export async function fetchSleeperPlayerLabels(
 ): Promise<Record<string, string>> {
   const requested = new Set(externalIds.filter((value) => value.length > 0));
   if (requested.size === 0) return {};
-  const catalog = await getJson(
-    fetcher,
-    "/players/nfl",
-    MAX_PLAYER_CATALOG_RESPONSE_BYTES,
-  );
-  if (
-    typeof catalog !== "object" ||
-    catalog === null ||
-    Array.isArray(catalog)
-  ) {
-    throw new Error("Sleeper player catalog is not an object.");
-  }
+  const { catalog } = await getPlayerCatalog(fetcher);
   const labels: Record<string, string> = {};
   for (const externalId of requested) {
-    const record = (catalog as Record<string, unknown>)[externalId];
+    const record = catalog[externalId];
     if (
       typeof record === "object" &&
       record !== null &&

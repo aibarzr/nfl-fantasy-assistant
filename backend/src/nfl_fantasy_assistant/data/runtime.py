@@ -54,6 +54,7 @@ class RuntimeRecommendationInput:
     projection: PlayerProjection
     value: PlayerValue
     source_updated_at: str
+    historical_durability: float | None = None
 
 
 def _finite_unit(value: object, label: str) -> None:
@@ -62,14 +63,18 @@ def _finite_unit(value: object, label: str) -> None:
 
 
 def _runtime_recommendation_inputs(
-    prepared: tuple[PreparedPlayer, ...], path: Path, model_version: str
-) -> tuple[RuntimeRecommendationInput, ...]:
+    prepared: tuple[PreparedPlayer, ...], path: Path
+) -> tuple[tuple[RuntimeRecommendationInput, ...], str]:
     rows: tuple[PreparedRecommendationInput, ...] = read_prepared_recommendation_inputs_parquet(
         path
     )
     prepared_by_id = {player.internal_player_id: player for player in prepared}
     if {row.internal_player_id for row in rows} != set(prepared_by_id):
         raise DataValidationError("runtime recommendation inputs do not cover the prepared pool")
+    model_versions = {row.projection_model_version for row in rows}
+    if len(model_versions) != 1 or not next(iter(model_versions), ""):
+        raise DataValidationError("runtime recommendation inputs have inconsistent model versions")
+    model_version = next(iter(model_versions))
     inputs: list[RuntimeRecommendationInput] = []
     for row in rows:
         prepared_player = prepared_by_id[row.internal_player_id]
@@ -104,6 +109,8 @@ def _runtime_recommendation_inputs(
             (row.market_prior, "market prior"),
         ):
             _finite_unit(value, label)
+        if row.historical_durability is not None:
+            _finite_unit(row.historical_durability, "historical durability")
         if not all(
             isinstance(warning, str) for warning in (*row.projection_warnings, *row.value_warnings)
         ) or not all(
@@ -144,9 +151,10 @@ def _runtime_recommendation_inputs(
                     row.value_normalization_version,
                 ),
                 row.source_updated_at,
+                row.historical_durability,
             )
         )
-    return tuple(sorted(inputs, key=lambda item: item.internal_player_id))
+    return tuple(sorted(inputs, key=lambda item: item.internal_player_id)), model_version
 
 
 def _read_exact_table(path: Path, expected_schema: object, label: str) -> list[dict[str, object]]:
@@ -351,10 +359,9 @@ def activate_sleeper_dataset(version: Path) -> ActivatedSleeperDataset:
             raise DataValidationError(
                 "runtime dataset has an ambiguous recommendation input output"
             )
-        recommendation_inputs = _runtime_recommendation_inputs(
+        recommendation_inputs, model_version = _runtime_recommendation_inputs(
             published.players,
             version / "prepared_recommendation_inputs.parquet",
-            model_version,
         )
         if len(recommendation_inputs) != recommendation_outputs[0].row_count:
             raise DataValidationError(

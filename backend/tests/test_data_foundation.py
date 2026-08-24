@@ -238,6 +238,12 @@ def test_features_are_time_safe_and_retain_rookie_missingness() -> None:
     assert features[2].usage_per_game_4 == pytest.approx(14)
 
 
+def test_unknown_availability_remains_null_through_feature_construction() -> None:
+    rows = [week_row(1, active=None), week_row(2, active=None)]
+    features = build_semantic_features(curate_weeks(rows, "source-1"))
+    assert features[1].availability_rate_4 is None
+
+
 def test_scoring_and_pool_reject_unsupported_or_unresolved() -> None:
     score = score_stat_line(
         {"passing_yards": 250, "passing_touchdowns": 2, "interceptions": 1},

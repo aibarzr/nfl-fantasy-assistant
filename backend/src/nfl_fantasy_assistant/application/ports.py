@@ -17,6 +17,7 @@ from nfl_fantasy_assistant.domain.draft import (
     LeagueConfig,
     LeagueId,
     Player,
+    PlayerStatusOverlay,
     RecommendationSnapshot,
 )
 
@@ -74,6 +75,12 @@ class DraftRepository(Protocol):
     def save_recommendation(self, snapshot: RecommendationSnapshot) -> None: ...
 
     def latest_recommendation(self, draft_id: DraftId) -> RecommendationSnapshot | None: ...
+
+    def save_status_overlay(self, overlay: PlayerStatusOverlay) -> bool: ...
+
+    def latest_status_overlay(
+        self, provider: str, dataset_version: str
+    ) -> PlayerStatusOverlay | None: ...
 
     def commit_reconciliation(
         self,

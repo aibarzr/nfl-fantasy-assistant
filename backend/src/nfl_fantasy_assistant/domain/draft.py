@@ -49,6 +49,59 @@ class ReconciliationState(StrEnum):
     BLOCKED = "blocked"
 
 
+class PlayerStatus(StrEnum):
+    """Provider-neutral current status observation, deliberately not a medical diagnosis."""
+
+    HEALTHY = "healthy"
+    LIMITED = "limited"
+    QUESTIONABLE = "questionable"
+    DOUBTFUL = "doubtful"
+    OUT = "out"
+    RESERVE = "reserve"
+    INACTIVE = "inactive"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerStatusOverlay:
+    """Immutable current-status revision used to reproduce a recommendation."""
+
+    overlay_id: str
+    provider: str
+    dataset_version: str
+    source_revision: str
+    source_checksum: str
+    observed_at: datetime
+    received_at: datetime
+    statuses: Mapping[str, PlayerStatus]
+
+    def __post_init__(self) -> None:
+        if (
+            not all(
+                (
+                    self.overlay_id,
+                    self.provider,
+                    self.dataset_version,
+                    self.source_revision,
+                    self.source_checksum,
+                )
+            )
+            or len(self.source_checksum) != 64
+            or any(character not in "0123456789abcdef" for character in self.source_checksum)
+            or self.observed_at.tzinfo is None
+            or self.received_at.tzinfo is None
+            or not self.statuses
+            or any(
+                not identifier or not isinstance(status, PlayerStatus)
+                for identifier, status in self.statuses.items()
+            )
+        ):
+            raise DomainError(
+                "status overlays require exact IDs, versions, checksum, and UTC times"
+            )
+        object.__setattr__(self, "statuses", MappingProxyType(dict(self.statuses)))
+
+
 @dataclass(frozen=True, slots=True)
 class DraftId:
     """Opaque internal draft identifier."""
@@ -314,6 +367,9 @@ class RecommendationSnapshot:
     source_updated_at: Mapping[str, str]
     is_current: bool = True
     chosen_player_id: str | None = None
+    status_overlay_id: str | None = None
+    status_overlay_observed_at: datetime | None = None
+    risk_policy_version: str | None = None
 
     def __post_init__(self) -> None:
         if self.generated_at.tzinfo is None or not self.snapshot_id:
@@ -326,6 +382,15 @@ class RecommendationSnapshot:
             raise DomainError("recommendation provenance requires all pinned versions")
         if tuple(sorted(self.available_player_ids)) != self.available_player_ids:
             raise DomainError("available player IDs must be stable sorted order")
+        if (self.status_overlay_id is None) != (self.status_overlay_observed_at is None):
+            raise DomainError("status overlay recommendation provenance must be complete or absent")
+        if (
+            self.status_overlay_observed_at is not None
+            and self.status_overlay_observed_at.tzinfo is None
+        ):
+            raise DomainError("status overlay provenance timestamp must be UTC-aware")
+        if self.risk_policy_version == "":
+            raise DomainError("recommendation risk policy version cannot be empty")
         object.__setattr__(
             self, "source_updated_at", MappingProxyType(dict(self.source_updated_at))
         )

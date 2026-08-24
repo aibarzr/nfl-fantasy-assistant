@@ -65,7 +65,8 @@ The exact schemas will be versioned with implementation, but the initial semanti
 - `market_rankings`: player, format, rank/ADP, uncertainty/range, source and timestamp.
 - `player_projections`: player, league/scoring context class, expected/floor/ceiling/confidence, model and feature versions.
 - `prepared_recommendation_inputs`: the selected prepared assets' typed projection/value outputs,
-  uncertainty, ranking market prior, warnings, source timestamp, and model/normalization versions.
+  uncertainty, ranking market prior, warnings, source timestamp, model/normalization versions,
+  and nullable time-safe historical durability. It contains no current provider status.
   It is produced beside `prepared.parquet`; it is not raw source data and is sufficient only to
   recompute state-dependent replacement/VOR and ranking under the pinned model.
 - `dataset_manifest`: dataset version, schemas, source timestamps/checksums, transform revision, and validation summary.
@@ -147,7 +148,16 @@ receptions, air yards, yards, expected touchdowns, EPA, and success rate. Kicker
 features require separately documented source coverage and semantics before publication; no
 QB/RB/WR/TE feature is silently repurposed as a K/DEF proxy.
 
-Derive higher-level versioned features such as usage, opportunity, efficiency, high-value usage, receiving/rushing role, role stability, and availability. Position-specific projection code consumes these stable features.
+Derive higher-level versioned features such as usage, opportunity, efficiency, high-value usage,
+receiving/rushing role, role stability, and availability. Availability is null unless an admitted
+source proves an observed participation state; a player-stat row, absent row, bye, and medical
+status are not interchangeable. Position-specific projection code consumes these stable features.
+
+Historical durability is a separately named participation proxy. Its calendar includes exact
+player/team/week eligibility, excludes byes, and records `participated`, `did_not_participate`, or
+`unknown` with source lineage. Four-game, eight-game, prior-season, and multi-season rates remain
+null when their calendar evidence is incomplete; an absence is never diagnosed as injury. A model
+may use the feature only under a versioned, independently validated risk policy.
 
 For K, regular-season nflverse play-by-play is transformed through the authoritative kicker ID
 into field-goal/extra-point attempts, made/missed extra-point counts, conversion measures, and
@@ -167,6 +177,8 @@ A dataset cannot be published unless checks cover:
 - Duplicate external mappings and unexplained identity loss.
 - Expected row-count/coverage changes by source and position.
 - Missingness thresholds for model-critical fields.
+- Explicit unknown semantics for availability and participation evidence; unknown must not become a
+  healthy or inactive observation.
 - No future information leakage in backtest features.
 - Deterministic transforms from the same inputs.
 - Complete lineage, timestamps, versions, and licenses/terms metadata.

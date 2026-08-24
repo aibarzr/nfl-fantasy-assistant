@@ -7,7 +7,11 @@ import {
   adaptSleeperRecoverySnapshot,
   sleeperPickEventId,
 } from "../src/adapters/sleeper/recovery-snapshot.js";
-import { fetchSleeperRecoverySnapshot } from "../src/adapters/sleeper/api.js";
+import {
+  fetchSleeperPlayerStatuses,
+  fetchSleeperRecoverySnapshot,
+  normalizeSleeperPlayerStatus,
+} from "../src/adapters/sleeper/api.js";
 import { detectSleeperDraftSurface } from "../src/adapters/sleeper/surface.js";
 
 describe("Sleeper recovery adapter", () => {
@@ -195,6 +199,43 @@ describe("Sleeper recovery adapter", () => {
       code: "invalid_draft_identity",
     });
     expect(requested).toHaveLength(1);
+  });
+
+  it("reduces approved status facts to neutral values and rejects conflicts", async () => {
+    expect(
+      normalizeSleeperPlayerStatus({
+        status: "Active",
+        injury_status: "Questionable",
+      }),
+    ).toBe("questionable");
+    expect(
+      normalizeSleeperPlayerStatus({
+        status: "Active",
+        practice_participation: "Limited Participation",
+      }),
+    ).toBe("limited");
+    expect(normalizeSleeperPlayerStatus({})).toBe("unknown");
+    expect(() =>
+      normalizeSleeperPlayerStatus({ status: "Active", injury_status: "IR" }),
+    ).toThrow("contradictory");
+
+    const snapshot = await fetchSleeperPlayerStatuses(
+      ["player-1", "player-2"],
+      "2026-08-24T12:00:00Z",
+      (async () =>
+        new Response(
+          JSON.stringify({
+            "player-1": { status: "Active" },
+            "player-2": { status: "Inactive" },
+          }),
+          { status: 200 },
+        )) as typeof fetch,
+    );
+    expect(snapshot.source_checksum).toMatch(/^[0-9a-f]{64}$/);
+    expect(snapshot.statuses).toEqual([
+      { external_id: "player-1", status: "healthy" },
+      { external_id: "player-2", status: "inactive" },
+    ]);
   });
 
   it("rejects a non-unique draft slot-to-roster mapping before reading picks", async () => {

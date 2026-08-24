@@ -39,6 +39,12 @@ type EventResponse = components["schemas"]["EventResponse"];
 type HealthResponse = components["schemas"]["HealthResponse"];
 type LeagueCreateRequest = components["schemas"]["LeagueCreateRequest"];
 type LeagueResponse = components["schemas"]["LeagueResponse"];
+type PlayerStatusOverlayRequest =
+  components["schemas"]["PlayerStatusOverlayRequest"];
+type PlayerStatusOverlayResponse =
+  components["schemas"]["PlayerStatusOverlayResponse"];
+type PlayerStatusRequirementsResponse =
+  components["schemas"]["PlayerStatusRequirementsResponse"];
 type RecommendationResponse = components["schemas"]["RecommendationResponse"];
 type SnapshotRequest = components["schemas"]["SnapshotRequest"];
 type SnapshotResponse = components["schemas"]["SnapshotResponse"];
@@ -112,6 +118,27 @@ export class BackendApiClient {
     return this.request(
       `/v1/drafts/${encodeURIComponent(draftId)}`,
       { method: "GET" },
+      true,
+    );
+  }
+
+  playerStatusRequirements(
+    draftId: string,
+  ): Promise<PlayerStatusRequirementsResponse> {
+    return this.request(
+      `/v1/drafts/${encodeURIComponent(draftId)}/player-status-requirements`,
+      { method: "GET" },
+      true,
+    );
+  }
+
+  ingestPlayerStatus(
+    draftId: string,
+    request: PlayerStatusOverlayRequest,
+  ): Promise<PlayerStatusOverlayResponse> {
+    return this.request(
+      `/v1/drafts/${encodeURIComponent(draftId)}/player-status`,
+      this.json("POST", request),
       true,
     );
   }

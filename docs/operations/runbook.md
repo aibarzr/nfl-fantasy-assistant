@@ -41,6 +41,11 @@ other than the configured extension origin.
 - A Sleeper initialization configuration contains only the validated neutral roster/scoring form;
   any unsupported provider roster or enabled scoring token leaves readiness unavailable.
 - Dataset and market-source timestamps meet configured freshness policy.
+- Availability warnings are reviewed: `availability_unknown` means the historical source did not
+  establish participation and must not be read as a healthy designation.
+- For Sleeper, current-status coverage is complete and no older than 36 hours. A missing, stale,
+  partial, conflicting, or unsupported overlay is `unknown`; do not treat it as healthy or repair
+  it by hand. Confirm its recorded overlay ID and observation time in recommendations.
 - Model/data versions are pinned for the session.
 - Initial snapshot pick count, order, rosters, and unresolved-player count are visible.
 - Provider API freshness, rate-limit/backoff state, and complete-snapshot status are green when a
@@ -87,7 +92,7 @@ Keep the last fully validated published dataset. A failed build never replaces i
 
 Authenticated diagnostics should report API compatibility, database readiness, active draft/revision, adapter observation time, unresolved/conflict counts, dataset/model/feature versions, source freshness, and last recommendation latency.
 
-Structured logs should correlate `request_id`, `league_id`, `draft_id`, `event_id`, surface/provider, action, player/pick when resolved, status, and model version. Never request or share tokens, cookies, raw personal payloads, or unsanitized captures during diagnosis.
+Structured logs should correlate `request_id`, `league_id`, `draft_id`, `event_id`, surface/provider, action, player/pick when resolved, status, model version, and status-overlay ID when present. Never request or share tokens, cookies, raw personal payloads, or unsanitized captures during diagnosis.
 
 ## Backup, export, and reset
 

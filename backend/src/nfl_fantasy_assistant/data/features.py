@@ -6,9 +6,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .curation import CuratedWeek
+from .durability import DurabilityFeature
 from .errors import DataValidationError
 
-FEATURE_VERSION = "3"
+FEATURE_VERSION = "4"
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +24,10 @@ class SemanticFeature:
     high_value_usage_per_game_4: float | None
     role_stability_4: float | None
     availability_rate_4: float | None
+    durability_rate_4: float | None
+    durability_rate_8: float | None
+    prior_season_participation_rate: float | None
+    multi_season_durability: float | None
     historical_production_points_per_game: float | None
     kicking_attempts_per_game_4: float | None
     kicking_conversion_rate_4: float | None
@@ -87,10 +92,19 @@ def _fantasy_production(row: CuratedWeek) -> float:
     return skill_position_points
 
 
-def build_semantic_features(rows: Iterable[CuratedWeek]) -> list[SemanticFeature]:
+def build_semantic_features(
+    rows: Iterable[CuratedWeek],
+    durability_features: Iterable[DurabilityFeature] = (),
+) -> list[SemanticFeature]:
     """Build each row using only earlier player weeks, including prior seasons."""
 
     ordered = sorted(rows, key=lambda row: (row.source_player_id, row.season, row.week))
+    durability_rows = tuple(durability_features)
+    durability_by_key = {
+        (item.source_player_id, item.season, item.week): item for item in durability_rows
+    }
+    if len(durability_by_key) != len(durability_rows):
+        raise DataValidationError("duplicate durability feature key")
     seen: set[tuple[str, int, int]] = set()
     by_player: dict[str, list[CuratedWeek]] = {}
     result: list[SemanticFeature] = []
@@ -146,7 +160,23 @@ def build_semantic_features(rows: Iterable[CuratedWeek]) -> list[SemanticFeature
                 efficiency_per_opportunity_4=_mean(efficiency_values),
                 high_value_usage_per_game_4=_mean([item.red_zone_touches or 0 for item in history]),
                 role_stability_4=stability,
-                availability_rate_4=_mean([1.0 if item.active else 0.0 for item in history]),
+                availability_rate_4=_mean(
+                    [1.0 if item.active else 0.0 for item in history if item.active is not None]
+                ),
+                durability_rate_4=(
+                    durability.durability_rate_4
+                    if (durability := durability_by_key.get(key)) is not None
+                    else None
+                ),
+                durability_rate_8=(
+                    durability.durability_rate_8 if durability is not None else None
+                ),
+                prior_season_participation_rate=(
+                    durability.prior_season_participation_rate if durability is not None else None
+                ),
+                multi_season_durability=(
+                    durability.multi_season_durability if durability is not None else None
+                ),
                 historical_production_points_per_game=_mean(
                     [_fantasy_production(item) for item in history]
                 ),

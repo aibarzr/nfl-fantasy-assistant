@@ -63,7 +63,7 @@ def test_migration_create_load_and_restart(tmp_path: Path) -> None:
     assert restarted.find_player_by_external_id("espn", "one") == player("one")
     assert [
         row[0] for row in restarted._connection.execute("SELECT version FROM schema_migrations")
-    ] == [1, 2]
+    ] == [1, 2, 3]
 
 
 def test_transition_rollback_and_database_constraints_preserve_previous_state(

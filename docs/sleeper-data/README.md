@@ -21,5 +21,10 @@ not a runtime asset.
 - `sleeper-asset-reference-sample.json` supplies synthetic individual-player, kicker, and
   team-defense reference shapes. The `DEF` reference is an exact fixture-local provider mapping;
   it never relies on a display name.
+- `sleeper-player-status-sample.json` is synthetic schema, enum, freshness, and conflict evidence
+  for the approved current player-status overlay. It contains no real catalog data and does not
+  assert an exhaustive provider enum.
 - `observability-finding-2026-08-22.md` defines the activation rule, evidence hierarchy, recovery
   conditions, identity safe stops, API cadence, and implementation gate.
+- `player-status-source-finding-2026-08-24.md` records the bounded source decision, observed
+  aggregate schema evidence, status translation, freshness, retention, and re-review conditions.

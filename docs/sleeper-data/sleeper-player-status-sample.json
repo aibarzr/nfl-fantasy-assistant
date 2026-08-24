@@ -1,0 +1,62 @@
+{
+  "fixture_metadata": {
+    "source_class": "synthetic_validation_input",
+    "purpose": "current-status translation, freshness, and conflict safe stops"
+  },
+  "observations": [
+    {
+      "external_id": "player-fixture-healthy",
+      "status": "Active",
+      "injury_status": null,
+      "practice_participation": null,
+      "expected_neutral_status": "healthy"
+    },
+    {
+      "external_id": "player-fixture-questionable",
+      "status": "Active",
+      "injury_status": "Questionable",
+      "practice_participation": "Limited Participation",
+      "expected_neutral_status": "questionable"
+    },
+    {
+      "external_id": "player-fixture-doubtful",
+      "status": "Active",
+      "injury_status": "Doubtful",
+      "practice_participation": "Did Not Participate",
+      "expected_neutral_status": "doubtful"
+    },
+    {
+      "external_id": "player-fixture-out",
+      "status": "Inactive",
+      "injury_status": "Out",
+      "practice_participation": null,
+      "expected_neutral_status": "out"
+    },
+    {
+      "external_id": "player-fixture-reserve",
+      "status": "Injured Reserve",
+      "injury_status": "IR",
+      "practice_participation": null,
+      "expected_neutral_status": "reserve"
+    },
+    {
+      "external_id": "player-fixture-unknown",
+      "status": null,
+      "injury_status": null,
+      "practice_participation": null,
+      "expected_neutral_status": "unknown"
+    },
+    {
+      "external_id": "player-fixture-conflict",
+      "status": "Active",
+      "injury_status": "IR",
+      "practice_participation": null,
+      "expected_neutral_status": "unknown"
+    }
+  ],
+  "freshness_cases": [
+    { "age_hours": 1, "expected_fresh": true },
+    { "age_hours": 36, "expected_fresh": true },
+    { "age_hours": 37, "expected_fresh": false }
+  ]
+}

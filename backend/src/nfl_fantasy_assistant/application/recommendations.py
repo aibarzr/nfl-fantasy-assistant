@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from nfl_fantasy_assistant.application.drafts import ApplicationError
@@ -13,6 +13,7 @@ from nfl_fantasy_assistant.data.runtime import ActivatedSleeperDataset, RuntimeR
 from nfl_fantasy_assistant.domain.draft import (
     DraftSession,
     DraftStatus,
+    PlayerStatus,
     RecommendationCandidate,
     RecommendationSnapshot,
 )
@@ -96,10 +97,23 @@ class RecommendationRuntime:
                     drafted_positions,
                 )
             }
+            status_overlay = self.repository.latest_status_overlay(
+                session.provider, session.dataset_version
+            )
+            overlay_is_fresh = status_overlay is not None and (
+                datetime.now(UTC) - status_overlay.observed_at <= timedelta(hours=36)
+            )
+            statuses = status_overlay.statuses if overlay_is_fresh and status_overlay else {}
             ranked = rank_draft_candidates(
                 session,
                 (
-                    DraftRankInput(item.value, vor_by_id[item.internal_player_id], item.projection)
+                    DraftRankInput(
+                        item.value,
+                        vor_by_id[item.internal_player_id],
+                        item.projection,
+                        item.historical_durability,
+                        statuses.get(item.internal_player_id, PlayerStatus.UNKNOWN),
+                    )
                     for item in available
                     if item.internal_player_id in vor_by_id
                 ),
@@ -138,6 +152,11 @@ class RecommendationRuntime:
             source_updated_at={
                 identifier: by_id[identifier].source_updated_at for identifier in available_ids
             },
+            status_overlay_id=status_overlay.overlay_id if status_overlay is not None else None,
+            status_overlay_observed_at=(
+                status_overlay.observed_at if status_overlay is not None else None
+            ),
+            risk_policy_version=ranked[0].risk_policy_version if ranked else None,
         )
         self.repository.save_recommendation(snapshot)
         return snapshot

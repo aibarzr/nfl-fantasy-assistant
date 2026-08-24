@@ -39,6 +39,9 @@ class DecisionObservation:
     slot: int
     is_rookie: bool
     confidence_bucket: str
+    status_class: str = "unknown"
+    durability_band: str = "unknown"
+    roster_rule: str = "default"
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +54,9 @@ class StrategyMetrics:
     by_slot: Mapping[int, float]
     by_rookie: Mapping[bool, float]
     by_confidence: Mapping[str, float]
+    by_status: Mapping[str, float]
+    by_durability: Mapping[str, float]
+    by_roster_rule: Mapping[str, float]
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +145,9 @@ def run_backtest(
             by_slot=_segmented([(row[0].slot, row[1]) for row in rows]),
             by_rookie=_segmented([(row[0].is_rookie, row[1]) for row in rows]),
             by_confidence=_segmented([(row[0].confidence_bucket, row[1]) for row in rows]),
+            by_status=_segmented([(row[0].status_class, row[1]) for row in rows]),
+            by_durability=_segmented([(row[0].durability_band, row[1]) for row in rows]),
+            by_roster_rule=_segmented([(row[0].roster_rule, row[1]) for row in rows]),
         )
     return BacktestReport(
         dataset_version,
@@ -198,6 +207,21 @@ def assert_promotable(
         "confidence",
         candidate_full.by_confidence,
         baseline_full.by_confidence,
+        maximum_segment_regression,
+    )
+    _assert_no_segment_regression(
+        "status", candidate_full.by_status, baseline_full.by_status, maximum_segment_regression
+    )
+    _assert_no_segment_regression(
+        "durability",
+        candidate_full.by_durability,
+        baseline_full.by_durability,
+        maximum_segment_regression,
+    )
+    _assert_no_segment_regression(
+        "roster rule",
+        candidate_full.by_roster_rule,
+        baseline_full.by_roster_rule,
         maximum_segment_regression,
     )
 

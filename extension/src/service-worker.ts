@@ -10,10 +10,12 @@ import { detectSleeperDraftSurface } from "./adapters/sleeper/surface.js";
 import {
   fetchSleeperInitializationSnapshot,
   fetchSleeperPlayerLabels,
+  fetchSleeperPlayerStatuses,
   fetchSleeperRecoverySnapshot,
 } from "./adapters/sleeper/api.js";
 import type { SleeperInitializationResult } from "./adapters/sleeper/initial-snapshot.js";
 import type { SleeperRecoveryResult } from "./adapters/sleeper/recovery-snapshot.js";
+import type { SleeperPlayerStatusSnapshot } from "./adapters/sleeper/api.js";
 import {
   loadSleeperInitializationConfiguration,
   type SleeperInitializationConfiguration,
@@ -138,6 +140,10 @@ export interface WorkerDependencies {
   fetchSleeperPlayerLabels?(
     externalIds: readonly string[],
   ): Promise<Record<string, string>>;
+  fetchSleeperPlayerStatuses?(
+    externalIds: readonly string[],
+    observedAt: string,
+  ): Promise<SleeperPlayerStatusSnapshot>;
 }
 
 const dependencies: WorkerDependencies = {
@@ -149,6 +155,7 @@ const dependencies: WorkerDependencies = {
   fetchSleeperInitialization: (pageUrl, observedAt, context) =>
     fetchSleeperInitializationSnapshot(pageUrl, observedAt, context),
   fetchSleeperPlayerLabels,
+  fetchSleeperPlayerStatuses,
 };
 
 const SLEEPER_PAGE_URL_MAX_LENGTH = 2_048;
@@ -251,6 +258,12 @@ function sleeperRuntimeIsReady(diagnostics: DiagnosticsResponse): boolean {
   );
 }
 
+function sameUtcDay(first: unknown, second: string): boolean {
+  return (
+    typeof first === "string" && first.slice(0, 10) === second.slice(0, 10)
+  );
+}
+
 export async function handleWorkerRequest(
   request: WorkerRequest,
   injected: WorkerDependencies = dependencies,
@@ -325,6 +338,20 @@ export async function handleWorkerRequest(
               retryable: false,
             },
           };
+        }
+        const statusRequirements = await client.playerStatusRequirements(
+          request.draftId,
+        );
+        if (
+          !sameUtcDay(
+            statusRequirements.latest_overlay_observed_at,
+            request.observedAt,
+          )
+        ) {
+          const statusSnapshot = await (
+            injected.fetchSleeperPlayerStatuses ?? fetchSleeperPlayerStatuses
+          )(statusRequirements.external_ids, request.observedAt);
+          await client.ingestPlayerStatus(request.draftId, statusSnapshot);
         }
         for (
           let index = state.accepted_picks;

@@ -21,6 +21,8 @@ from nfl_fantasy_assistant.domain.draft import (
     LeagueId,
     Player,
     PlayerReference,
+    PlayerStatus,
+    PlayerStatusOverlay,
     RecommendationCandidate,
     RecommendationSnapshot,
     ReconciliationState,
@@ -163,6 +165,13 @@ def _snapshot_to_json(snapshot: RecommendationSnapshot) -> str:
             "source_updated_at": dict(snapshot.source_updated_at),
             "is_current": snapshot.is_current,
             "chosen_player_id": snapshot.chosen_player_id,
+            "status_overlay_id": snapshot.status_overlay_id,
+            "status_overlay_observed_at": (
+                snapshot.status_overlay_observed_at.isoformat()
+                if snapshot.status_overlay_observed_at is not None
+                else None
+            ),
+            "risk_policy_version": snapshot.risk_policy_version,
         }
     )
 
@@ -195,6 +204,46 @@ def _snapshot_from_json(value: str) -> RecommendationSnapshot:
         source_updated_at=raw["source_updated_at"],
         is_current=raw["is_current"],
         chosen_player_id=raw["chosen_player_id"],
+        status_overlay_id=raw.get("status_overlay_id"),
+        status_overlay_observed_at=(
+            datetime.fromisoformat(raw["status_overlay_observed_at"])
+            if raw.get("status_overlay_observed_at")
+            else None
+        ),
+        risk_policy_version=raw.get("risk_policy_version"),
+    )
+
+
+def _status_overlay_to_json(overlay: PlayerStatusOverlay) -> str:
+    return _json(
+        {
+            "overlay_id": overlay.overlay_id,
+            "provider": overlay.provider,
+            "dataset_version": overlay.dataset_version,
+            "source_revision": overlay.source_revision,
+            "source_checksum": overlay.source_checksum,
+            "observed_at": overlay.observed_at.isoformat(),
+            "received_at": overlay.received_at.isoformat(),
+            "statuses": {
+                identifier: status.value for identifier, status in overlay.statuses.items()
+            },
+        }
+    )
+
+
+def _status_overlay_from_json(value: str) -> PlayerStatusOverlay:
+    raw = json.loads(value)
+    return PlayerStatusOverlay(
+        overlay_id=raw["overlay_id"],
+        provider=raw["provider"],
+        dataset_version=raw["dataset_version"],
+        source_revision=raw["source_revision"],
+        source_checksum=raw["source_checksum"],
+        observed_at=datetime.fromisoformat(raw["observed_at"]),
+        received_at=datetime.fromisoformat(raw["received_at"]),
+        statuses={
+            identifier: PlayerStatus(status) for identifier, status in raw["statuses"].items()
+        },
     )
 
 
@@ -655,3 +704,58 @@ class SqliteDraftRepository:
             (draft_id.value,),
         ).fetchone()
         return _snapshot_from_json(row[0]) if row is not None else None
+
+    def save_status_overlay(self, overlay: PlayerStatusOverlay) -> bool:
+        encoded = _status_overlay_to_json(overlay)
+        try:
+            with self._transaction() as connection:
+                existing = connection.execute(
+                    "SELECT snapshot_json FROM player_status_overlays WHERE overlay_id = ?",
+                    (overlay.overlay_id,),
+                ).fetchone()
+                if existing is not None:
+                    persisted = _status_overlay_from_json(existing["snapshot_json"])
+                    if (
+                        persisted.overlay_id,
+                        persisted.provider,
+                        persisted.dataset_version,
+                        persisted.source_revision,
+                        persisted.source_checksum,
+                        persisted.observed_at,
+                        dict(persisted.statuses),
+                    ) != (
+                        overlay.overlay_id,
+                        overlay.provider,
+                        overlay.dataset_version,
+                        overlay.source_revision,
+                        overlay.source_checksum,
+                        overlay.observed_at,
+                        dict(overlay.statuses),
+                    ):
+                        raise PersistenceError("status overlay ID conflicts with existing revision")
+                    return False
+                connection.execute(
+                    "INSERT INTO player_status_overlays(overlay_id, provider, dataset_version, "
+                    "observed_at, snapshot_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        overlay.overlay_id,
+                        overlay.provider,
+                        overlay.dataset_version,
+                        overlay.observed_at.isoformat(),
+                        encoded,
+                        _timestamp(),
+                    ),
+                )
+            return True
+        except sqlite3.DatabaseError as error:
+            raise PersistenceError("could not persist player-status overlay") from error
+
+    def latest_status_overlay(
+        self, provider: str, dataset_version: str
+    ) -> PlayerStatusOverlay | None:
+        row = self._connection.execute(
+            "SELECT snapshot_json FROM player_status_overlays WHERE provider = ? "
+            "AND dataset_version = ? ORDER BY observed_at DESC, created_at DESC LIMIT 1",
+            (provider, dataset_version),
+        ).fetchone()
+        return _status_overlay_from_json(row["snapshot_json"]) if row is not None else None

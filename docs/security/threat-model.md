@@ -72,6 +72,11 @@ and draft identifiers are private local configuration/diagnostic values and are 
 exports, fixtures, and logs. Remote telemetry is off-scope and cannot be introduced without
 explicit consent, a data inventory, retention policy, and updated threat model.
 
+The approved current player-status overlay stores only exact mapped provider IDs, neutral status,
+observation/receipt timestamps, source revision, checksum, and freshness state. It excludes raw
+catalog payloads, player display names, medical notes, and browser-authentication material. A
+missing or stale overlay is represented as `unknown`, never as a healthy observation.
+
 ## Security acceptance
 
 Before live integration, test unauthorized requests, disallowed origins, token rotation, malformed/large payloads, message-source validation, log redaction, and minimal manifest permissions. Security failures must never partially mutate canonical state.

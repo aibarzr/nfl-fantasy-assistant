@@ -56,6 +56,10 @@ The MVP protocol provides these operations; exact schemas are introduced with th
 - `POST /v1/drafts/{draft_id}/events` — submit one idempotent observation.
 - `POST /v1/drafts/{draft_id}/snapshot` — reconcile a declared-completeness snapshot.
 - `GET /v1/drafts/{draft_id}` — canonical state summary and unresolved issues.
+- `GET /v1/drafts/{draft_id}/player-status-requirements` — exact Sleeper external IDs for one
+  pinned prepared dataset and the latest persisted overlay observation time.
+- `POST /v1/drafts/{draft_id}/player-status` — a complete neutral current-status overlay; it
+  accepts no provider names, notes, or raw fields.
 - `GET /v1/drafts/{draft_id}/recommendations` — latest valid recommendations and provenance. For
   an activated Sleeper runtime, initialization, accepted events, and successful reconciliation
   regenerate that snapshot only after the canonical state is active and fully identity-resolved.
@@ -142,6 +146,12 @@ non-current outcome; it does not permit identity guessing or a version switch.
 - Reusing the ID with different material data returns `409 event_id_conflict`.
 - A future pick with missing predecessors returns an accepted-needs-reconciliation or conflict outcome defined by the OpenAPI operation; it is never silently reordered.
 - State-changing responses expose the resulting canonical revision. Requests may include the last observed revision where optimistic conflict detection is useful.
+- A status overlay is semantic-idempotent by provider, dataset pin, source revision/checksum,
+  observation time, and sorted exact-ID facts; receipt time does not make a retry distinct.
+  Changed semantic facts create another immutable revision. The request must declare complete
+  coverage, contain every required exact external ID exactly once, and be no more than 36 hours old
+  or five minutes future-dated; a partial, stale, future, duplicate, or unsupported overlay is
+  rejected without replacing the last valid one.
 
 ## Recommendations
 
@@ -150,8 +160,8 @@ reference, rank, draft score, confidence, normalized component scores, concise r
 and relevant uncertainty/freshness warnings. The extension may resolve that reference to a display
 label in its provider adapter. A provider catalog label is presentation-only: it is never posted to
 the backend, persisted in canonical state, or used to rank candidates. The response contains draft
-revision, generated timestamp, model version, feature version, dataset version, and source-update
-metadata.
+revision, generated timestamp, model version, feature version, dataset version, source-update
+metadata, and optional status-overlay ID/observation time.
 
 If state is blocked or inputs violate freshness policy, the endpoint returns an explicit non-current status and issues; it must not label an old result as current.
 

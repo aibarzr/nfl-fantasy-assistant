@@ -101,7 +101,7 @@ def test_current_pool_is_scored_only_for_current_crosswalk_assets() -> None:
 
     assert len(prepared) == 1
     assert prepared[0].internal_player_id == internal_player_id(player())
-    assert prepared[0].feature_version == "3"
+    assert prepared[0].feature_version == "4"
     assert prepared[0].dataset_version == "fixture-current-v1"
 
 
@@ -121,7 +121,7 @@ def test_current_pool_retains_exact_ranking_inputs_for_every_selected_asset() ->
     }
     ranking_input = build.recommendation_inputs[0]
     assert ranking_input.dataset_version == "fixture-current-v1"
-    assert ranking_input.projection_model_version == "projection-v3"
+    assert ranking_input.projection_model_version == "projection-v4"
     assert 0 <= ranking_input.market_prior <= 1
 
 

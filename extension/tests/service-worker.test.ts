@@ -227,6 +227,27 @@ describe("service-worker relay", () => {
             { status: 200 },
           );
         }
+        if (String(url).endsWith("/player-status-requirements")) {
+          return new Response(
+            JSON.stringify({
+              provider: "sleeper",
+              dataset_version: "dataset-fixture",
+              external_ids: ["player-1"],
+              latest_overlay_observed_at: null,
+            }),
+            { status: 200 },
+          );
+        }
+        if (String(url).endsWith("/player-status")) {
+          return new Response(
+            JSON.stringify({
+              overlay_id: "status-fixture",
+              observed_at: "2026-08-23T00:00:00Z",
+              replayed: false,
+            }),
+            { status: 200 },
+          );
+        }
         return new Response(
           JSON.stringify({
             outcome: "reconciled",
@@ -269,6 +290,13 @@ describe("service-worker relay", () => {
           },
           eventIds: ["sleeper:draft-fixture:pick:1"],
         }),
+        fetchSleeperPlayerStatuses: async () => ({
+          source_revision: "fixture",
+          source_checksum: "a".repeat(64),
+          observed_at: "2026-08-23T00:00:00Z",
+          declared_complete: true,
+          statuses: [{ external_id: "player-1", status: "healthy" }],
+        }),
       },
     );
 
@@ -279,10 +307,12 @@ describe("service-worker relay", () => {
     expect(calls.map((call) => call.url)).toEqual([
       "http://127.0.0.1:8765/v1/diagnostics",
       "http://127.0.0.1:8765/v1/drafts/draft-local",
+      "http://127.0.0.1:8765/v1/drafts/draft-local/player-status-requirements",
+      "http://127.0.0.1:8765/v1/drafts/draft-local/player-status",
       "http://127.0.0.1:8765/v1/drafts/draft-local/events",
       "http://127.0.0.1:8765/v1/drafts/draft-local/snapshot",
     ]);
-    expect(calls[2]?.body).toContain(
+    expect(calls[4]?.body).toContain(
       '"event_id":"sleeper:draft-fixture:pick:1"',
     );
   });

@@ -6,7 +6,12 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from nfl_fantasy_assistant.domain.draft import DraftSession, DraftStatus, RecommendationCandidate
+from nfl_fantasy_assistant.domain.draft import (
+    DraftSession,
+    DraftStatus,
+    PlayerStatus,
+    RecommendationCandidate,
+)
 
 from .projection import PlayerProjection
 from .replacement import ValueOverReplacement
@@ -35,6 +40,8 @@ class DraftRankInput:
     player_value: PlayerValue
     vor: ValueOverReplacement
     projection: PlayerProjection
+    historical_durability: float | None = None
+    current_status: PlayerStatus = PlayerStatus.UNKNOWN
 
     def __post_init__(self) -> None:
         identifiers = {
@@ -47,12 +54,15 @@ class DraftRankInput:
             or len({self.player_value.position, self.vor.position, self.projection.position}) != 1
         ):
             raise RankingError("ranking inputs must join exactly by player ID and position")
+        if self.historical_durability is not None and not 0 <= self.historical_durability <= 1:
+            raise RankingError("historical durability must be a unit value when known")
 
 
 @dataclass(frozen=True, slots=True)
 class RankingParameters:
     ranking_version: str = "draft-ranking-v1"
     normalization_version: str = "draft-components-v1"
+    risk_policy_version: str = "injury-risk-v1-warning-only"
     profiles: Mapping[str, Mapping[str, float]] = field(
         default_factory=lambda: {
             "early": {
@@ -87,6 +97,7 @@ class RankingParameters:
         if (
             not self.ranking_version
             or not self.normalization_version
+            or not self.risk_policy_version
             or set(self.profiles)
             != {
                 "early",
@@ -112,6 +123,7 @@ class RankedRecommendation:
     model_version: str
     feature_version: str
     dataset_version: str
+    risk_policy_version: str
 
 
 def _stage(session: DraftSession) -> str:
@@ -223,6 +235,17 @@ def rank_draft_candidates(
             "market": round(market_scores[identifier], 6),
             "roster": round(roster_scores.get(item.player_value.position, 0.0), 6),
             "risk_upside": round(upside, 6),
+            "historical_durability": round(item.historical_durability or 0.0, 6),
+            "current_status_risk": {
+                PlayerStatus.HEALTHY: 0.0,
+                PlayerStatus.LIMITED: 0.25,
+                PlayerStatus.QUESTIONABLE: 0.5,
+                PlayerStatus.DOUBTFUL: 0.75,
+                PlayerStatus.OUT: 1.0,
+                PlayerStatus.RESERVE: 1.0,
+                PlayerStatus.INACTIVE: 1.0,
+                PlayerStatus.UNKNOWN: 0.5,
+            }[item.current_status],
         }
         score = round(sum(components[name] * weights[name] for name in weights), 6)
         reasons: list[str] = []
@@ -234,9 +257,27 @@ def rank_draft_candidates(
             reasons.append("positional_scarcity")
         if components["roster"] >= 0.5:
             reasons.append("roster_need")
+        if item.current_status is not PlayerStatus.HEALTHY:
+            reasons.append(f"current_status_{item.current_status.value}")
+        if item.historical_durability is not None and item.historical_durability < 0.75:
+            reasons.append("low_historical_durability")
         if not reasons:
             reasons.append("balanced_value")
-        warnings = tuple(sorted(set((*item.player_value.warnings, *item.projection.warnings))))
+        warnings_list = [*item.player_value.warnings, *item.projection.warnings]
+        confidence_multiplier = 1.0
+        if item.current_status is PlayerStatus.UNKNOWN:
+            warnings_list.append("current_status_unknown")
+            confidence_multiplier *= 0.92
+        elif item.current_status is not PlayerStatus.HEALTHY:
+            warnings_list.append(f"current_status_{item.current_status.value}")
+            confidence_multiplier *= 0.96
+        if item.historical_durability is None:
+            warnings_list.append("historical_durability_unknown")
+            confidence_multiplier *= 0.92
+        elif item.historical_durability < 0.75:
+            warnings_list.append("low_historical_durability")
+            confidence_multiplier *= 0.95
+        warnings = tuple(sorted(set(warnings_list)))
         reason_text = "; ".join(reasons).replace("_", " ")
         recommendations.append(
             RankedRecommendation(
@@ -245,7 +286,12 @@ def rank_draft_candidates(
                     rank=0,
                     draft_score=score,
                     confidence=round(
-                        _clamp((item.player_value.confidence + item.projection.confidence) / 2), 3
+                        _clamp(
+                            (item.player_value.confidence + item.projection.confidence)
+                            / 2
+                            * confidence_multiplier
+                        ),
+                        3,
                     ),
                     components=components,
                     reason_codes=tuple(reasons),
@@ -258,6 +304,7 @@ def rank_draft_candidates(
                 model_version=item.projection.model_version,
                 feature_version=session.feature_version,
                 dataset_version=session.dataset_version,
+                risk_policy_version=active_parameters.risk_policy_version,
             )
         )
     ranked = sorted(
@@ -282,6 +329,7 @@ def rank_draft_candidates(
             model_version=item.model_version,
             feature_version=item.feature_version,
             dataset_version=item.dataset_version,
+            risk_policy_version=item.risk_policy_version,
         )
         for index, item in enumerate(ranked, start=1)
     )

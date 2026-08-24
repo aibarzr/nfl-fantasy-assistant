@@ -67,6 +67,7 @@ class PreparedRecommendationInput:
     source_updated_at: str
     feature_version: str
     dataset_version: str
+    historical_durability: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +93,7 @@ PREPARED_SCHEMA = pa.schema(
 )
 
 
-PREPARED_RECOMMENDATION_INPUT_SCHEMA = pa.schema(
+PREPARED_RECOMMENDATION_INPUT_SCHEMA_V1 = pa.schema(
     [
         ("internal_player_id", pa.string()),
         ("position", pa.string()),
@@ -113,6 +114,13 @@ PREPARED_RECOMMENDATION_INPUT_SCHEMA = pa.schema(
         ("source_updated_at", pa.string()),
         ("feature_version", pa.string()),
         ("dataset_version", pa.string()),
+    ]
+)
+
+PREPARED_RECOMMENDATION_INPUT_SCHEMA = pa.schema(
+    [
+        *PREPARED_RECOMMENDATION_INPUT_SCHEMA_V1,
+        ("historical_durability", pa.float64()),
     ]
 )
 
@@ -219,7 +227,10 @@ def read_prepared_recommendation_inputs_parquet(
 ) -> tuple[PreparedRecommendationInput, ...]:
     """Load typed ranking inputs while rejecting schema or identity drift."""
     table = pq.read_table(path)
-    if table.schema != PREPARED_RECOMMENDATION_INPUT_SCHEMA:
+    if (
+        table.schema != PREPARED_RECOMMENDATION_INPUT_SCHEMA_V1
+        and table.schema != PREPARED_RECOMMENDATION_INPUT_SCHEMA
+    ):
         raise DataValidationError("prepared recommendation input table has an unexpected schema")
     rows_list: list[PreparedRecommendationInput] = []
     for row in table.to_pylist():
@@ -231,6 +242,7 @@ def read_prepared_recommendation_inputs_parquet(
             PreparedRecommendationInput(
                 **{
                     **row,
+                    "historical_durability": row.get("historical_durability"),
                     "projection_warnings": tuple(projection_warnings),
                     "value_warnings": tuple(value_warnings),
                 }

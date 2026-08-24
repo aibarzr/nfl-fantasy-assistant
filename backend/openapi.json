@@ -584,6 +584,146 @@
         "title": "PlayerReferenceInput",
         "type": "object"
       },
+      "PlayerStatusObservationInput": {
+        "additionalProperties": false,
+        "properties": {
+          "external_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "External Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "healthy",
+              "limited",
+              "questionable",
+              "doubtful",
+              "out",
+              "reserve",
+              "inactive",
+              "unknown"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_id",
+          "status"
+        ],
+        "title": "PlayerStatusObservationInput",
+        "type": "object"
+      },
+      "PlayerStatusOverlayRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "declared_complete": {
+            "const": true,
+            "title": "Declared Complete",
+            "type": "boolean"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "source_checksum": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Checksum",
+            "type": "string"
+          },
+          "source_revision": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "statuses": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerStatusObservationInput"
+            },
+            "maxItems": 1024,
+            "minItems": 1,
+            "title": "Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_revision",
+          "source_checksum",
+          "observed_at",
+          "declared_complete",
+          "statuses"
+        ],
+        "title": "PlayerStatusOverlayRequest",
+        "type": "object"
+      },
+      "PlayerStatusOverlayResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "overlay_id": {
+            "title": "Overlay Id",
+            "type": "string"
+          },
+          "replayed": {
+            "title": "Replayed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "overlay_id",
+          "observed_at",
+          "replayed"
+        ],
+        "title": "PlayerStatusOverlayResponse",
+        "type": "object"
+      },
+      "PlayerStatusRequirementsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset_version": {
+            "title": "Dataset Version",
+            "type": "string"
+          },
+          "external_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "External Ids",
+            "type": "array"
+          },
+          "latest_overlay_observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Overlay Observed At"
+          },
+          "provider": {
+            "const": "sleeper",
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "dataset_version",
+          "external_ids"
+        ],
+        "title": "PlayerStatusRequirementsResponse",
+        "type": "object"
+      },
       "RecommendationCandidateResponse": {
         "additionalProperties": false,
         "properties": {
@@ -687,6 +827,17 @@
             "title": "Revision",
             "type": "integer"
           },
+          "risk_policy_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Policy Version"
+          },
           "source_updated_at": {
             "additionalProperties": {
               "type": "string"
@@ -698,6 +849,29 @@
             "const": "current",
             "title": "Status",
             "type": "string"
+          },
+          "status_overlay_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Overlay Id"
+          },
+          "status_overlay_observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Overlay Observed At"
           }
         },
         "required": [
@@ -1077,6 +1251,154 @@
           }
         ],
         "summary": "Ingest Event"
+      }
+    },
+    "/v1/drafts/{draft_id}/player-status": {
+      "post": {
+        "operationId": "ingest_player_status_v1_drafts__draft_id__player_status_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerStatusOverlayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerStatusOverlayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ingest Player Status"
+      }
+    },
+    "/v1/drafts/{draft_id}/player-status-requirements": {
+      "get": {
+        "operationId": "player_status_requirements_v1_drafts__draft_id__player_status_requirements_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerStatusRequirementsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Player Status Requirements"
       }
     },
     "/v1/drafts/{draft_id}/recommendations": {

@@ -11,6 +11,7 @@ from nfl_fantasy_assistant.domain.draft import (
     DraftStatus,
     LeagueConfig,
     LeagueId,
+    PlayerStatus,
     RosterSlot,
 )
 from nfl_fantasy_assistant.models.draft_ranking import (
@@ -92,6 +93,8 @@ def test_ranking_returns_explainable_versioned_top_n_with_canonical_filtering() 
         "market",
         "roster",
         "risk_upside",
+        "historical_durability",
+        "current_status_risk",
     }
     assert result[0].ranking_version == "draft-ranking-v1"
     assert result[0].feature_version == "feature-v1"
@@ -117,6 +120,34 @@ def test_ranking_rejects_blocked_or_drafted_availability() -> None:
             (rank_input("drafted-1", "RB", 0.5, 0.5),),
             {"drafted-1": "RB"},
         )
+
+
+@pytest.mark.parametrize("status", list(PlayerStatus))
+def test_injury_risk_policy_is_warning_only_and_reduces_confidence(status: PlayerStatus) -> None:
+    base = rank_input("player", "RB", 0.5, 0.5)
+    result = rank_draft_candidates(
+        session(),
+        (DraftRankInput(base.player_value, base.vor, base.projection, 0.7, status),),
+        {},
+    )[0]
+    assert result.risk_policy_version == "injury-risk-v1-warning-only"
+    assert "current_status_risk" in result.candidate.components
+    assert (
+        result.candidate.draft_score
+        == rank_draft_candidates(
+            session(),
+            (
+                DraftRankInput(
+                    base.player_value, base.vor, base.projection, 0.7, PlayerStatus.HEALTHY
+                ),
+            ),
+            {},
+        )[0].candidate.draft_score
+    )
+    if status is PlayerStatus.HEALTHY:
+        assert "current_status_unknown" not in result.warnings
+    else:
+        assert f"current_status_{status.value}" in result.warnings
 
 
 def test_k_and_def_have_replacement_and_explainable_ranking_coverage() -> None:

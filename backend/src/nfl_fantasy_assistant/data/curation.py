@@ -81,7 +81,9 @@ class CuratedWeek:
     yards_allowed: float | None
     red_zone_touches: float | None
     snap_share: float | None
-    active: bool
+    # A player-stat row proves production, not necessarily game-day eligibility. This remains
+    # nullable until an approved participation source establishes an observed state.
+    active: bool | None
     source_updated_at: str
     lineage_manifest_id: str
 
@@ -146,6 +148,15 @@ def _number(row: Mapping[str, Any], name: str) -> float | None:
     if number < 0 and name not in SIGNED_YARD_FIELDS:
         raise DataValidationError(f"{name} cannot be negative")
     return number
+
+
+def _active_evidence(row: Mapping[str, Any]) -> bool | None:
+    value = row.get("active")
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise DataValidationError("active evidence must be a boolean or null")
+    return value
 
 
 def curate_players(rows: Iterable[Mapping[str, Any]], manifest_id: str) -> list[CuratedPlayer]:
@@ -227,7 +238,7 @@ def curate_weeks(rows: Iterable[Mapping[str, Any]], manifest_id: str) -> list[Cu
                 season=key[1],
                 week=key[2],
                 position=position,
-                active=bool(_required(row, "active")),
+                active=_active_evidence(row),
                 source_updated_at=str(_required(row, "source_updated_at")),
                 lineage_manifest_id=manifest_id,
                 **values,

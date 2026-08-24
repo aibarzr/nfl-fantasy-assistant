@@ -15,9 +15,11 @@ const readFixture = async (name) =>
 
 const recovery = await readFixture("sleeper-8-team-recovery-snapshot.json");
 const references = await readFixture("sleeper-asset-reference-sample.json");
+const status = await readFixture("sleeper-player-status-sample.json");
 const fixtures = new Map([
   ["sleeper-8-team-recovery-snapshot.json", recovery],
   ["sleeper-asset-reference-sample.json", references],
+  ["sleeper-player-status-sample.json", status],
 ]);
 const forbidden = [
   /accessToken/i,
@@ -74,6 +76,23 @@ assert(
     (reference) => reference.position === "K" && reference.external_id.startsWith("player-fixture-"),
   ),
   "Reference fixture lacks an individual-player kicker.",
+);
+
+assert(
+  new Set(status.observations.map((observation) => observation.expected_neutral_status)).size === 6,
+  "Status fixture must cover healthy, risk, reserve, and unknown states.",
+);
+assert(
+  status.observations.every(
+    (observation) =>
+      observation.external_id.startsWith("player-fixture-") &&
+      typeof observation.expected_neutral_status === "string",
+  ),
+  "Status fixture has an invalid synthetic identity or neutral status.",
+);
+assert(
+  status.freshness_cases.some((scenario) => scenario.expected_fresh === false),
+  "Status fixture must cover stale evidence.",
 );
 assert(
   references.player_references.some(

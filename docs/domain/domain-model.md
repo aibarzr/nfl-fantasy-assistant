@@ -11,6 +11,8 @@
 - **Draftable-asset reference:** provider plus external ID, optionally accompanied by display fields.
 - **Internal draftable asset:** the stable application entity to which external identities map. It is either an individual player or a team-defense asset.
 - **Recommendation snapshot:** ranked output plus every input/version needed to reproduce it.
+- **Player-status overlay:** an immutable, complete current-status observation for exact prepared
+  asset IDs with neutral status, source revision/checksum, observed and received timestamps.
 
 Names, abbreviations, team, and position are attributes, not identity. `gsis_id` is preferred when available, but a generated internal ID is always retained.
 
@@ -58,7 +60,7 @@ conflict.
 
 ### RecommendationSnapshot
 
-Records pick context, timestamp, available-player set or stable reference to it, candidates and components, chosen action if known, league config version, model/feature/dataset versions, and source update times.
+Records pick context, timestamp, available-player set or stable reference to it, candidates and components, chosen action if known, league config version, model/feature/dataset versions, source update times, and the exact status-overlay ID/observation time when one was used.
 
 ## Invariants
 
@@ -70,6 +72,9 @@ Records pick context, timestamp, available-player set or stable reference to it,
 - Rosters are projections of accepted picks and the configured order.
 - Replacement level and roster legality derive from the active league configuration.
 - A draft pins versions; the same pinned inputs yield the same ranking.
+- A status overlay is accepted only when every required exact prepared asset appears once and its
+  timezone-aware timestamp is within the configured 36-hour window. Invalid overlays cannot replace
+  the latest valid revision.
 
 ## Identity resolution
 

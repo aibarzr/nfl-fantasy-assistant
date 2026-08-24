@@ -52,7 +52,7 @@ def test_position_projectors_are_deterministic_and_position_specific(position: s
     )
     assert projection == replay
     assert projection.floor_points < projection.expected_points < projection.ceiling_points
-    assert projection.model_version == "projection-v3"
+    assert projection.model_version == "projection-v4"
     if position == "QB":
         assert "rushing_role" in projection.components
     if position in {"RB", "WR", "TE"}:
@@ -75,6 +75,20 @@ def test_ppr_and_stale_feature_inputs_change_scoring_and_confidence_explicitly()
     assert ppr.expected_points > standard.expected_points
     assert stale.confidence < ppr.confidence
     assert "stale_features" in stale.warnings
+
+
+def test_unknown_availability_is_not_replaced_by_a_neutral_healthy_score() -> None:
+    healthy = project_player(
+        ProjectionInput("healthy", "WR", features(availability_rate=1.0)), SCORING, now=NOW
+    )
+    unknown = project_player(
+        ProjectionInput("unknown", "WR", features(availability_rate=None)), SCORING, now=NOW
+    )
+    assert "availability" not in unknown.components
+    assert "availability_unknown" in unknown.warnings
+    assert unknown.confidence < healthy.confidence
+    # The omission has a documented confidence cost and cannot be treated as the healthy value.
+    assert unknown.expected_points != healthy.expected_points
 
 
 def test_rookie_uses_documented_prior_without_missing_history_penalty() -> None:

@@ -44,3 +44,4 @@ The existing baseline decisions are captured in the project principles and archi
 - [ADR-0003: Model team defenses as draftable assets](0003-model-team-defenses-as-draftable-assets.md)
 - [ADR-0004: Identity-only observed Sleeper assets](0004-identity-only-observed-sleeper-assets.md)
 - [ADR-0005: Wikidata external-identity candidates](0005-wikidata-external-identity-candidates.md)
+- [ADR-0006: Versioned current player-status overlay](0006-versioned-current-status-overlay.md)

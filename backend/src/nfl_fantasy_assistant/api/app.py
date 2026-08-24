@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -33,6 +35,8 @@ from nfl_fantasy_assistant.domain.draft import (
     LeagueConfig,
     LeagueId,
     PlayerReference,
+    PlayerStatus,
+    PlayerStatusOverlay,
     RosterSlot,
 )
 from nfl_fantasy_assistant.domain.scoring import ScoringError, validate_scoring_rules
@@ -235,7 +239,38 @@ class RecommendationResponse(ProtocolModel):
     feature_version: str
     model_version: str
     source_updated_at: dict[str, str]
+    status_overlay_id: str | None = None
+    status_overlay_observed_at: datetime | None = None
+    risk_policy_version: str | None = None
     candidates: list[RecommendationCandidateResponse]
+
+
+class PlayerStatusObservationInput(ProtocolModel):
+    external_id: str = Field(min_length=1, max_length=MAX_TEXT_LENGTH)
+    status: Literal[
+        "healthy", "limited", "questionable", "doubtful", "out", "reserve", "inactive", "unknown"
+    ]
+
+
+class PlayerStatusOverlayRequest(ProtocolModel):
+    source_revision: str = Field(min_length=1, max_length=MAX_TEXT_LENGTH)
+    source_checksum: str = Field(pattern=r"^[0-9a-f]{64}$")
+    observed_at: datetime
+    declared_complete: Literal[True]
+    statuses: list[PlayerStatusObservationInput] = Field(min_length=1, max_length=1024)
+
+
+class PlayerStatusRequirementsResponse(ProtocolModel):
+    provider: Literal["sleeper"]
+    dataset_version: str
+    external_ids: list[str]
+    latest_overlay_observed_at: datetime | None = None
+
+
+class PlayerStatusOverlayResponse(ProtocolModel):
+    overlay_id: str
+    observed_at: datetime
+    replayed: bool
 
 
 def _state_response(state: object) -> DraftStateResponse:
@@ -418,6 +453,33 @@ def create_app(
         ):
             recommendation_runtime.generate(state)
 
+    def status_requirements(state: DraftSession) -> dict[str, str]:
+        if state.provider != "sleeper" or recommendation_runtime is None or sleeper_dataset is None:
+            raise ApplicationError(
+                "player_status_unavailable",
+                "Current player status requires an active Sleeper recommendation runtime.",
+                503,
+            )
+        if state.dataset_version != sleeper_dataset.dataset_version:
+            raise ApplicationError(
+                "player_status_version_conflict",
+                "Current player status does not match the draft's pinned immutable dataset.",
+                409,
+            )
+        requirements: dict[str, str] = {}
+        for item in sleeper_dataset.recommendation_inputs:
+            player = repository.get_player(item.internal_player_id)
+            external_id = player.external_ids.get("sleeper") if player is not None else None
+            if not external_id or external_id in requirements:
+                raise ApplicationError(
+                    "player_status_identity_invalid",
+                    "Current player status requires one exact Sleeper identity for every "
+                    "candidate.",
+                    503,
+                )
+            requirements[external_id] = item.internal_player_id
+        return requirements
+
     @app.post(
         "/v1/leagues",
         response_model=LeagueResponse,
@@ -484,6 +546,94 @@ def create_app(
     async def get_draft(draft_id: str) -> DraftStateResponse:
         state = service._require_draft(DraftId(draft_id))
         return _state_response(state)
+
+    @app.get(
+        "/v1/drafts/{draft_id}/player-status-requirements",
+        response_model=PlayerStatusRequirementsResponse,
+        responses={409: {"model": ErrorEnvelope}, 503: {"model": ErrorEnvelope}},
+        dependencies=[Depends(authenticate)],
+    )
+    async def player_status_requirements(draft_id: str) -> PlayerStatusRequirementsResponse:
+        state = service._require_draft(DraftId(draft_id))
+        requirements = status_requirements(state)
+        latest_overlay = repository.latest_status_overlay(state.provider, state.dataset_version)
+        return PlayerStatusRequirementsResponse(
+            provider="sleeper",
+            dataset_version=state.dataset_version,
+            external_ids=sorted(requirements),
+            latest_overlay_observed_at=(latest_overlay.observed_at if latest_overlay else None),
+        )
+
+    @app.post(
+        "/v1/drafts/{draft_id}/player-status",
+        response_model=PlayerStatusOverlayResponse,
+        responses={
+            400: {"model": ErrorEnvelope},
+            409: {"model": ErrorEnvelope},
+            503: {"model": ErrorEnvelope},
+        },
+        dependencies=[Depends(authenticate)],
+    )
+    async def ingest_player_status(
+        draft_id: str, request: PlayerStatusOverlayRequest
+    ) -> PlayerStatusOverlayResponse:
+        state = service._require_draft(DraftId(draft_id))
+        requirements = status_requirements(state)
+        if request.observed_at.tzinfo is None:
+            raise ApplicationError(
+                "invalid_timestamp", "Player-status timestamps must include UTC offset."
+            )
+        observed_at = request.observed_at.astimezone(UTC)
+        received_at = datetime.now(UTC)
+        age_seconds = (received_at - observed_at).total_seconds()
+        if age_seconds > 36 * 60 * 60 or age_seconds < -5 * 60:
+            raise ApplicationError(
+                "player_status_stale",
+                "Player-status observations must be no more than 36 hours old and not future "
+                "dated.",
+            )
+        incoming = {item.external_id: item.status for item in request.statuses}
+        if len(incoming) != len(request.statuses) or set(incoming) != set(requirements):
+            raise ApplicationError(
+                "player_status_incomplete",
+                "Player-status overlay must contain each exact current recommendation "
+                "candidate once.",
+            )
+        statuses = {
+            requirements[external_id]: PlayerStatus(status)
+            for external_id, status in incoming.items()
+        }
+        canonical = json.dumps(
+            {
+                "provider": state.provider,
+                "dataset_version": state.dataset_version,
+                "source_revision": request.source_revision,
+                "source_checksum": request.source_checksum,
+                "observed_at": observed_at.isoformat(),
+                "statuses": {
+                    identifier: status.value for identifier, status in sorted(statuses.items())
+                },
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        overlay = PlayerStatusOverlay(
+            overlay_id=f"status_{hashlib.sha256(canonical).hexdigest()}",
+            provider=state.provider,
+            dataset_version=state.dataset_version,
+            source_revision=request.source_revision,
+            source_checksum=request.source_checksum,
+            observed_at=observed_at,
+            received_at=received_at,
+            statuses=statuses,
+        )
+        created = repository.save_status_overlay(overlay)
+        refresh_recommendations(state)
+        return PlayerStatusOverlayResponse(
+            overlay_id=overlay.overlay_id,
+            observed_at=overlay.observed_at,
+            replayed=not created,
+        )
 
     @app.post(
         "/v1/drafts/{draft_id}/events",
@@ -608,6 +758,9 @@ def create_app(
             feature_version=snapshot.feature_version,
             model_version=snapshot.model_version,
             source_updated_at=dict(snapshot.source_updated_at),
+            status_overlay_id=snapshot.status_overlay_id,
+            status_overlay_observed_at=snapshot.status_overlay_observed_at,
+            risk_policy_version=snapshot.risk_policy_version,
             candidates=candidates,
         )
 

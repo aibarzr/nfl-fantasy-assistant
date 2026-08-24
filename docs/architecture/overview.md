@@ -39,6 +39,11 @@ The extension may cache non-authoritative configuration in `chrome.storage`. It 
 - **Draft engine:** applies current league, availability, roster, pick timing, scarcity, and risk.
 - **Persistence:** implements repositories for canonical state, provenance, and recommendation snapshots.
 
+Current provider status is a separate versioned neutral overlay: the extension adapter reduces
+approved provider facts to exact IDs and neutral vocabulary, while SQLite retains immutable
+revisions. It does not alter the pinned prepared dataset or expose raw provider records to domain
+code. [ADR-0006](decisions/0006-versioned-current-status-overlay.md) records this boundary.
+
 ### Storage
 
 - **SQLite:** mutable application state, mappings/exceptions, metadata, and recommendation history.
@@ -84,6 +89,12 @@ session; draft decisions consume prepared asset value rather than raw historical
 4. State and the event outcome are committed atomically.
 5. The engine calculates recommendations from prepared values and current state.
 6. The recommendation snapshot and its provenance are persisted before the response is rendered.
+
+### Refresh current player status
+
+1. After a valid Sleeper recovery observation, the worker asks which exact prepared IDs need status coverage.
+2. If no overlay from the current UTC day exists, the adapter performs its bounded catalog read and reduces only approved facts.
+3. The backend accepts only a complete, fresh exact-ID overlay and records its immutable revision in regenerated recommendation provenance.
 
 ### Reconcile and recover
 

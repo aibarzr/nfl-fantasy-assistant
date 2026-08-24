@@ -234,7 +234,9 @@ def test_runtime_activation_loads_only_exact_prepared_sleeper_assets(tmp_path: P
 
     assert activated.dataset_version == "sleeper-runtime-fixture-v1"
     assert activated.feature_version == "3"
-    assert activated.model_version == "projection-v3"
+    # Identity-only legacy artifacts do not carry recommendation inputs; they expose the current
+    # default model solely for diagnostics and cannot generate a recommendation snapshot.
+    assert activated.model_version == "projection-v4"
     assert {player.external_ids["sleeper"] for player in activated.players} == {
         "player-external",
         "DET",

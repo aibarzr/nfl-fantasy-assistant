@@ -106,6 +106,8 @@ def main() -> None:
     )
     current_pool_parser.add_argument("--pbp-manifest", type=Path, action="append", required=True)
     current_pool_parser.add_argument("--pbp-snapshot", type=Path, action="append", required=True)
+    current_pool_parser.add_argument("--participation-calendar-manifest", type=Path)
+    current_pool_parser.add_argument("--participation-calendar-snapshot", type=Path)
     current_pool_parser.add_argument("--league-config", type=Path, required=True)
     current_pool_parser.add_argument("--crosswalk-report", type=Path, required=True)
     current_pool_parser.add_argument("--publication-root", type=Path, required=True)
@@ -525,7 +527,20 @@ def main() -> None:
             parser.error("player-stat manifests and snapshots must be paired")
         if len(arguments.pbp_manifest) != len(arguments.pbp_snapshot):
             parser.error("PBP manifests and snapshots must be paired")
+        if bool(arguments.participation_calendar_manifest) != bool(
+            arguments.participation_calendar_snapshot
+        ):
+            parser.error("participation calendar manifest and snapshot must be supplied together")
         try:
+            participation_calendar = (
+                read_verified_snapshot(
+                    arguments.participation_calendar_manifest,
+                    arguments.participation_calendar_snapshot,
+                )
+                if arguments.participation_calendar_manifest
+                and arguments.participation_calendar_snapshot
+                else None
+            )
             version = build_and_publish_current_pool(
                 arguments.assets,
                 read_verified_snapshot(
@@ -550,6 +565,7 @@ def main() -> None:
                 arguments.publication_root,
                 dataset_version=arguments.dataset_version,
                 target_size=arguments.target_size,
+                participation_calendar=participation_calendar,
             )
         except (OSError, ValueError) as error:
             parser.error(str(error))

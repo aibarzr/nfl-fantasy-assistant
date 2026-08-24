@@ -22,6 +22,14 @@ substituting a flat rule. K is projected as an individual player and `DEF` as a 
 model may be enabled until its source coverage, scoring semantics, confidence behavior, and
 validation segment are versioned.
 Availability, role stability, high-value usage, and efficiency remain distinct explainable inputs.
+Availability is unknown when an admitted source does not prove participation; the projector omits
+that component, emits a warning, and applies a versioned confidence reduction rather than treating
+unknown as healthy, inactive, or a neutral value.
+
+Historical durability is an explainable participation proxy, not an injury diagnosis. It is built
+from a complete eligible-week calendar and may provide four-game, eight-game, prior-season, and
+recency-weighted multi-season rates. It stays null for incomplete evidence and is not promoted into
+projection or draft-risk weights until its position-segmented, time-safe backtest passes.
 
 Rookies follow a separate projector because missing NFL history is not negative evidence. The initial configurable prior is 50% ECR, 25% draft capital, 15% expected role/depth chart, and 10% athletic profile. NCAA production remains deferred.
 
@@ -76,6 +84,27 @@ Return Top-N candidates, never only an opaque winner. Each includes:
 - Relevant tier drop or next-pick survival estimate.
 - Risk/freshness warnings.
 - Model, feature, and dataset versions.
+- Current-status overlay ID and observation time when current player-status evidence was available.
+
+Current player status is provenance and explanation input, not a projection feature. Any change to
+ranking, projection, or confidence policy requires separately versioned, calibrated evidence.
+
+## Current-status and durability policy
+
+`injury-risk-v1-warning-only` keeps the injury-neutral draft score and rank unchanged. It emits
+`current_status_risk` and `historical_durability` components for explanation, then reduces only
+confidence: 8% for unknown current status or unavailable durability, 4% for a non-healthy neutral
+status, and 5% when complete historical durability is below 0.75. These multipliers are explicit
+uncertainty behavior, not injury probabilities or value penalties. Current `healthy` removes the
+status uncertainty reduction; unknown, stale, missing, contradictory, and unsupported evidence
+remain unknown. No status automatically excludes a candidate, including reserve labels.
+
+The policy consumes immutable historical durability from the prepared recommendation-input artifact
+and a fresh (at most 36-hour) persisted neutral overlay. It retains the overlay ID/observation time
+and `injury-risk-v1-warning-only` policy version in recommendation provenance. A stale overlay is
+retained for replay but is not used as current evidence. Numeric projection or ranking penalties
+remain disabled until a separately promoted calibrated parameter version beats the injury-neutral
+baseline by the documented segment gates.
 
 Explanations must reflect the actual calculation; they are not post-hoc generic text.
 
@@ -85,7 +114,8 @@ Evaluate projection independently with MAE/RMSE, Spearman correlation, top-N and
 
 Measure roster value, actual historical fantasy output without leakage, positional advantage,
 replacement value, and value captured. Segment results by position (including K and DEF), league
-format, draft slot/stage, rookies, and confidence. A K/DEF model must not be promoted on aggregate
+format, draft slot/stage, rookies, confidence, current-status class, durability band, and roster
+rules. A K/DEF model must not be promoted on aggregate
 metrics alone when its position segment regresses or lacks coverage.
 
 A model version is promoted only when:

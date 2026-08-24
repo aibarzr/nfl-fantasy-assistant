@@ -45,6 +45,7 @@ class ProjectionFeatures:
     rushing_role: float | None = None
     role_stability: float | None = None
     availability_rate: float | None = None
+    durability_rate: float | None = None
     historical_points_per_game: float | None = None
     kicking_attempts_per_game: float | None = None
     kicking_conversion_rate: float | None = None
@@ -93,6 +94,9 @@ class ProjectionFeatures:
             else None,
             "availability": _clamp(self.availability_rate)
             if self.availability_rate is not None
+            else None,
+            "durability": _clamp(self.durability_rate)
+            if self.durability_rate is not None
             else None,
             "historical_points": _normalized(self.historical_points_per_game, 30.0),
             "kicking_attempts": _normalized(self.kicking_attempts_per_game, 5.0),
@@ -156,8 +160,8 @@ class ProjectionInput:
 class ProjectionParameters:
     """All deterministic feature/scoring weights, with a reproducibility version."""
 
-    model_version: str = "projection-v3"
-    normalization_version: str = "semantic-v3"
+    model_version: str = "projection-v4"
+    normalization_version: str = "semantic-v4"
     stale_after_days: int = 14
     position_weights: Mapping[str, Mapping[str, float]] = field(
         default_factory=lambda: {
@@ -422,12 +426,22 @@ def project_player(
     else:
         for name, weight in active_parameters.position_weights[player.position].items():
             value = normalized[name]
+            if name == "availability" and value is None:
+                warnings = (*warnings, "availability_unknown")
+                continue
             components[name] = weight * (0.5 if value is None else value)
             present += value is not None
-        base = sum(components.values())
+        supported_weight = sum(
+            weight
+            for name, weight in active_parameters.position_weights[player.position].items()
+            if name in components
+        )
+        base = sum(components.values()) / supported_weight if supported_weight else 0.5
         confidence = 0.35 + 0.55 * (
             present / len(active_parameters.position_weights[player.position])
         )
+        if "availability_unknown" in warnings:
+            confidence *= 0.92
     scoring = _scoring_adjustment(player.position, scoring_rules, player.features)
     components["scoring_adjustment"] = scoring / 10.0
     expected = round((7.0 + 18.0 * base + scoring) * freshness, 3)
